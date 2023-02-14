@@ -1,4 +1,4 @@
-module gitlab.com/innovation-upstream/codema
+module github.com/innovation-upstream/codema
 
 go 1.19
 
