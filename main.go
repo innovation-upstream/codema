@@ -162,7 +162,7 @@ func main() {
 		fmt.Printf("Rendered target: %s\n", t.Label)
 	}
 
-	if len(renderedTargets) != len(targetsToRender) {
+	if !isAllTargets && len(renderedTargets) != len(targetsToRender) {
 		for _, tr := range targetsToRender {
 			if !renderedTargets.Includes(tr) {
 				fmt.Printf("WARN Skipped target: %s because it was not defined\n", tr)
