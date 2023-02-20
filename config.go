@@ -34,7 +34,6 @@ type (
 	TargetApi struct {
 		Label      string   `yaml:"label"`
 		OutPath    string   `yaml:"outPath"`
-		Each       bool     `yaml:"each"`
 		SkipLabels []string `yaml:"skipLabels"`
 	}
 
@@ -42,6 +41,7 @@ type (
 		Label        string      `yaml:"label"`
 		TemplatePath string      `yaml:"templatePath"`
 		Apis         []TargetApi `yaml:"apis"`
+		Each         bool        `yaml:"each"`
 	}
 
 	Config struct {

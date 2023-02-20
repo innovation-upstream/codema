@@ -91,7 +91,7 @@ func main() {
 			}
 
 			var pathSb strings.Builder
-			if ta.Each {
+			if t.Each {
 			msRender:
 				for _, m := range a.Microservices {
 					for _, sl := range ta.SkipLabels {

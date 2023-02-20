@@ -11,10 +11,10 @@ apis:
 targets:
   - label: relay
     templatePath: /relayFn.template
+    each: true
     apis:
       - label: booking
-        outPath: /{{.Label}}/relay_fn_generated.go
-        each: true
+        outPath: /{{.Label}}/{{.Microservice.Label}}_relay_fn_generated.go
   - label: grpc
     templatePath: /grpc.template
     apis:
