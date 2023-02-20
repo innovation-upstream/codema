@@ -1,0 +1,45 @@
+package relay
+
+import (
+        "context"
+        "time"
+
+        "github.com/newrelic/go-agent/v3/integrations/nrgrpc"
+        "github.com/pkg/errors"
+        "gitlab.com/mobl-dev/env"
+        dialer "github.com/innovation-upstream/cloudrun-grpc-dialer"
+        servicename "gitlab.com/mobl-dev/helpers/meta/service-name"
+        "google.golang.org/grpc"
+)
+
+func Get{{.Microservice.LabelCamel}}Relay(
+        ctx context.Context,
+        dialer dialer.CloudrunGRPCDialer,
+        relayFactory {{.Microservice.LabelCamel}}RelayFactoryWithDialer,
+) ({{.Microservice.LabelCamel}}Relay, func(), error) {
+        ctx, cancel := context.WithTimeout(ctx, time.Second*45)
+        defer cancel()
+
+        depSvc := servicename.{{.Api.LabelScreamingSnake}}.GetCloudrunServiceName()
+
+        conn, cleanup, err := dialer.DialGRPCService(
+                ctx,
+                depSvc,
+                env.IsTLS,
+                env.IsAuthRequired,
+                grpc.WithUnaryInterceptor(nrgrpc.UnaryClientInterceptor),
+                grpc.WithStreamInterceptor(nrgrpc.StreamClientInterceptor),
+        )
+        if err != nil {
+                return nil, cleanup, errors.WithStack(err)
+        }
+
+        re := relayFactory(
+                ctx,
+                conn.Connection.RpcConn,
+                conn.GetAuthenticateGRPCContextFn(env.IsAuthRequired),
+        )
+
+        return re, cleanup, nil
+}
+

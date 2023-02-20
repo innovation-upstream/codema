@@ -1,0 +1,26 @@
+package {{.Package}}
+
+import (
+  "context"
+
+  {{$apiLabel := .LabelKebab}}
+  {{ range .Microservices -}}
+  {{ .LabelLowerCamel }}Server "gitlab.com/mobl-dev/service/{{ $apiLabel }}/{{ .LabelKebab }}/server"
+  {{ end -}}
+  "google.golang.org/grpc"
+)
+
+var RegisterServer = func(
+  ctx context.Context,
+  s *grpc.Server,
+) func() {
+  {{ range .Microservices -}}
+  cleanup{{ .LabelCamel }} := {{ .LabelLowerCamel }}Server.RegisterServer(ctx, s)
+  {{ end }}
+  return func() {
+    {{ range .Microservices -}}
+      cleanup{{ .LabelCamel }}()
+    {{ end -}}
+  }
+}
+
