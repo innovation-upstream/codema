@@ -11,14 +11,7 @@ import (
 )
 
 type (
-	OutFile struct {
-		Path         string   `yaml:"path"`
-		TemplatePath string   `yaml:"templatePath"`
-		Each         bool     `yaml:"each"`
-		SkipLabels   []string `yaml:"skipLabels"`
-	}
-
-	Microservice struct {
+	MicroserviceDefinition struct {
 		Label               string `yaml:"label"`
 		LabelKebab          string
 		LabelCamel          string
@@ -27,11 +20,10 @@ type (
 		LabelScreamingSnake string
 	}
 
-	Api struct {
-		Files               []OutFile      `yaml:"files"`
-		Microservices       []Microservice `yaml:"microservices"`
-		Package             string         `yaml:"package"`
-		Label               string         `yaml:"label"`
+	ApiDefinition struct {
+		Microservices       []MicroserviceDefinition `yaml:"microservices"`
+		Package             string                   `yaml:"package"`
+		Label               string                   `yaml:"label"`
 		LabelKebab          string
 		LabelCamel          string
 		LabelLowerCamel     string
@@ -39,10 +31,24 @@ type (
 		LabelScreamingSnake string
 	}
 
+	TargetApi struct {
+		Label      string   `yaml:"label"`
+		OutPath    string   `yaml:"outPath"`
+		Each       bool     `yaml:"each"`
+		SkipLabels []string `yaml:"skipLabels"`
+	}
+
+	Target struct {
+		Label        string      `yaml:"label"`
+		TemplatePath string      `yaml:"templatePath"`
+		Apis         []TargetApi `yaml:"apis"`
+	}
+
 	Config struct {
-		Apis        []Api  `yaml:"apis"`
-		ModuleDir   string `yaml:"moduleDir"`
-		TemplateDir string `yaml:"templateDir"`
+		Apis        []ApiDefinition `yaml:"apis"`
+		ModuleDir   string          `yaml:"moduleDir"`
+		TemplateDir string          `yaml:"templateDir"`
+		Targets     []Target        `yaml:"targets"`
 	}
 )
 

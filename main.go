@@ -19,18 +19,26 @@ func main() {
 	modulePath := expandModulePath(config.ModuleDir)
 	templatePath := expandTemplatePath(config.TemplateDir)
 
+	apis := make(map[string]ApiDefinition)
+
 	for _, a := range config.Apis {
-		for _, f := range a.Files {
-			pathTmpl, err := template.New("path").Parse(f.Path)
+		apis[a.Label] = a
+	}
+
+	for _, t := range config.Targets {
+		for _, ta := range t.Apis {
+			a := apis[ta.Label]
+
+			pathTmpl, err := template.New("outpath").Parse(ta.OutPath)
 			if err != nil {
 				panic(fmt.Sprintf("Error executing template: %+v", err))
 			}
 
 			var pathSb strings.Builder
-			if f.Each {
+			if ta.Each {
 			msRender:
 				for _, m := range a.Microservices {
-					for _, sl := range f.SkipLabels {
+					for _, sl := range ta.SkipLabels {
 						if sl == m.Label {
 							continue msRender
 						}
@@ -39,8 +47,8 @@ func main() {
 					pathSb.Reset()
 					err = pathTmpl.Execute(&pathSb, struct {
 						Label        string
-						Microservice Microservice
-						Api          Api
+						Microservice MicroserviceDefinition
+						Api          ApiDefinition
 					}{
 						Label:        a.Label,
 						Microservice: m,
@@ -52,7 +60,7 @@ func main() {
 
 					pathExpanded := pathSb.String()
 					path := modulePath + pathExpanded
-					tmplPath := templatePath + f.TemplatePath
+					tmplPath := templatePath + t.TemplatePath
 
 					tmplRaw, err := os.ReadFile(tmplPath)
 					if err != nil {
@@ -68,7 +76,7 @@ func main() {
 			} else {
 				err = pathTmpl.Execute(&pathSb, struct {
 					Label string
-					Api   Api
+					Api   ApiDefinition
 				}{
 					Label: a.Label,
 					Api:   a,
@@ -79,7 +87,7 @@ func main() {
 
 				pathExpanded := pathSb.String()
 				path := modulePath + pathExpanded
-				tmplPath := templatePath + f.TemplatePath
+				tmplPath := templatePath + t.TemplatePath
 
 				tmplRaw, err := os.ReadFile(tmplPath)
 				if err != nil {
@@ -97,7 +105,7 @@ func main() {
 	}
 }
 
-func renderSingleFile(path, templateStr string, api Api) error {
+func renderSingleFile(path, templateStr string, api ApiDefinition) error {
 	os.Chmod(path, 0666)
 	file, err := os.Create(path)
 	if err != nil {
@@ -136,8 +144,8 @@ func renderSingleFile(path, templateStr string, api Api) error {
 
 func renderEachFile(
 	path, templateRaw string,
-	api Api,
-	ms Microservice,
+	api ApiDefinition,
+	ms MicroserviceDefinition,
 ) error {
 	os.Chmod(path, 0666)
 	file, err := os.Create(path)
@@ -153,8 +161,8 @@ func renderEachFile(
 
 	var sb strings.Builder
 	err = tmpl.Execute(&sb, struct {
-		Api          Api
-		Microservice Microservice
+		Api          ApiDefinition
+		Microservice MicroserviceDefinition
 	}{
 		Api:          api,
 		Microservice: ms,
