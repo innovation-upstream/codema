@@ -8,6 +8,7 @@ apis:
     - label: bookingOracle
     - label: bookingAttribute
     - label: eagerBooking
+
 targets:
   - label: relay
     templatePath: /relayFn.template
@@ -15,8 +16,24 @@ targets:
     apis:
       - label: booking
         outPath: /{{.Label}}/{{.Microservice.Label}}_relay_fn_generated.go
+
   - label: grpc
     templatePath: /grpc.template
     apis:
       - label: booking
         outPath: /{{.Label}}/grpc_generated.go
+
+  - label: repo
+    templatePath: /repo.template
+    each: true
+    apis:
+      - label: booking
+        outPath: /{{.Api.LabelKebab}}/{{.Microservice.Label}}_repo.codema.go
+        skipLabels:
+        - booking
+        - bookingOracle
+        - eagerBooking
+        args:
+          bookingAttribute: 
+            UpdateableFieldsBsonToGoFieldMap:
+              participant_owner_uids: ParticipantOwnerUIDs

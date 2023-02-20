@@ -31,10 +31,13 @@ type (
 		LabelScreamingSnake string
 	}
 
+	TargetApiArgs map[string]map[string]map[string]string
+
 	TargetApi struct {
-		Label      string   `yaml:"label"`
-		OutPath    string   `yaml:"outPath"`
-		SkipLabels []string `yaml:"skipLabels"`
+		Label      string        `yaml:"label"`
+		OutPath    string        `yaml:"outPath"`
+		SkipLabels []string      `yaml:"skipLabels"`
+		Args       TargetApiArgs `yaml:"args"`
 	}
 
 	Target struct {

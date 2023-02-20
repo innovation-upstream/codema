@@ -132,7 +132,9 @@ func main() {
 						panic(fmt.Sprintf("Error reading file: %+v", err))
 					}
 
-					err = renderEachFile(path, string(tmplRaw), a, m)
+					args := ta.Args[m.Label]
+
+					err = renderEachFile(path, string(tmplRaw), a, m, args)
 					if err != nil {
 						panic(err)
 					}
@@ -229,6 +231,7 @@ func renderEachFile(
 	path, templateRaw string,
 	api ApiDefinition,
 	ms MicroserviceDefinition,
+	args map[string]map[string]string,
 ) error {
 	os.Chmod(path, 0666)
 	file, err := os.Create(path)
@@ -246,9 +249,11 @@ func renderEachFile(
 	err = tmpl.Execute(&sb, struct {
 		Api          ApiDefinition
 		Microservice MicroserviceDefinition
+		Args         map[string]map[string]string
 	}{
 		Api:          api,
 		Microservice: ms,
+		Args:         args,
 	})
 	if err != nil {
 		return err

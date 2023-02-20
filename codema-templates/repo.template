@@ -1,0 +1,163 @@
+package repo
+
+import (
+	"context"
+
+	"github.com/pkg/errors"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/external/model"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+const {{.Microservice.LabelCamel}}Database = "{{.Microservice.LabelKebab}}-record-db"
+const {{.Microservice.LabelCamel}}Collection = "{{.Microservice.LabelKebab}}-record"
+
+type (
+	{{.Microservice.LabelCamel}}Repo interface {
+		Create(
+			ctx context.Context,
+			sub *model.{{.Microservice.LabelCamel}},
+		) error
+		Delete(
+			ctx context.Context,
+			uids []string,
+		) error
+		Search(
+			ctx context.Context,
+			q *model.{{.Microservice.LabelCamel}}Query,
+		) (model.{{.Microservice.LabelCamel}}s, bool, error)
+		Update(
+			ctx context.Context,
+			uid string,
+			data *model.{{.Microservice.LabelCamel}},
+		) error
+	}
+
+	{{.Microservice.LabelLowerCamel}}Repo struct {
+		mdb *mongo.Collection
+	}
+
+	{{.Microservice.LabelCamel}}RepoFactory func(
+		*mongo.Collection,
+	) {{.Microservice.LabelCamel}}Repo
+)
+
+var New{{.Microservice.LabelCamel}}Repo {{.Microservice.LabelCamel}}RepoFactory = func(
+	mdb *mongo.Collection,
+) {{.Microservice.LabelCamel}}Repo {
+	return &{{.Microservice.LabelLowerCamel}}Repo{
+		mdb,
+	}
+}
+
+func (r *{{.Microservice.LabelLowerCamel}}Repo) Create(
+	ctx context.Context,
+	sub *model.{{.Microservice.LabelCamel}},
+) error {
+	if sub == nil {
+		return errors.New("Tried to create nil {{.Microservice.LabelLowerCamel}} record")
+	}
+
+	_, err := r.mdb.InsertOne(ctx, sub)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (r *{{.Microservice.LabelLowerCamel}}Repo) Update(
+	ctx context.Context,
+	uid string,
+	data *model.{{.Microservice.LabelCamel}},
+) error {
+	if data == nil {
+		return errors.New("Tried to update nil {{.Microservice.LabelLowerCamel}}")
+	}
+
+	_, err := r.mdb.UpdateOne(
+		ctx,
+		bson.M{
+			"uid": bson.M{"$eq": uid},
+		},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+        {{ range $k, $v := .Args.UpdateableFieldsBsonToGoFieldMap -}}
+        {Key: "{{$k}}", Value: data.{{$v}}},
+        {{ end -}}
+      }},
+		},
+	)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (r *{{.Microservice.LabelLowerCamel}}Repo) Delete(ctx context.Context, uids []string) error {
+	if uids == nil || len(uids) == 0 {
+		return errors.New("Tried to get {{.Microservice.LabelLowerCamel}} record by empty uid")
+	}
+
+	_, err := r.mdb.UpdateOne(
+		ctx,
+		bson.M{
+			"uid": bson.M{"$in": uids},
+		},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+        {Key: "is_deleted", Value: true},
+      }},
+		},
+	)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (r *{{.Microservice.LabelLowerCamel}}Repo) Search(
+	ctx context.Context,
+	q *model.{{.Microservice.LabelCamel}}Query,
+) (model.{{.Microservice.LabelCamel}}s, bool, error) {
+	if q == nil {
+		return nil, false, errors.New("Tried to query with nil query")
+	}
+
+	queryOpts := q.ToMongoBSON()
+	queryOpts["is_deleted"] = bson.M{"$ne": true}
+	queryOpts["is_hidden"] = bson.M{"$exists": false}
+
+	page := uint32(1)
+	if q.Page > 0 {
+		page = q.Page
+	}
+
+	c, err := r.mdb.Find(
+		ctx,
+		queryOpts,
+		options.Find().SetLimit(int64(q.PageSize)+1).
+			SetSkip(int64(page-1)*int64(q.PageSize)),
+	)
+	if err != nil {
+		return nil, false, errors.WithStack(err)
+	}
+
+	var {{.Microservice.LabelLowerCamel}}s model.{{.Microservice.LabelCamel}}s
+	err = c.All(ctx, &{{.Microservice.LabelLowerCamel}}s)
+	if err != nil {
+		return nil, false, errors.WithStack(err)
+	}
+
+	if q.PageSize == 0 || uint32(len({{.Microservice.LabelLowerCamel}}s)) <= q.PageSize {
+		return {{.Microservice.LabelLowerCamel}}s, false, nil
+	}
+
+	locs, _ := {{.Microservice.LabelLowerCamel}}s.Head(int(q.PageSize))
+
+	return locs, true, nil
+}
+
