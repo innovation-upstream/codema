@@ -1,4 +1,4 @@
-moduleDir: .
+moduleDir: ./out
 templateDir: ./codema-templates
 apis:
   - package: booking
@@ -13,10 +13,10 @@ targets:
     templatePath: /relayFn.template
     apis:
       - label: booking
-        outPath: /out/{{.Label}}/relay_fn_generated.go
+        outPath: /{{.Label}}/relay_fn_generated.go
         each: true
   - label: grpc
     templatePath: /grpc.template
     apis:
       - label: booking
-        outPath: /out/{{.Label}}/grpc_generated.go
+        outPath: /{{.Label}}/grpc_generated.go
