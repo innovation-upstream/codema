@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/format"
 	"os"
@@ -10,7 +11,38 @@ import (
 	"github.com/pkg/errors"
 )
 
+type (
+	TargetFlags []string
+)
+
+func (t TargetFlags) Includes(s string) bool {
+	if t == nil || len(t) == 0 {
+		return false
+	}
+
+	head := t[0]
+	tail := t[1:]
+
+	if string(head) == s {
+		return true
+	}
+
+	return tail.Includes(s)
+}
+
 func main() {
+	var targetsRaw string
+	flag.StringVar(&targetsRaw, "t", "*", "Targets to render")
+	flag.Parse()
+
+	isAllTargets := targetsRaw == "*"
+	targetsToRender := TargetFlags(strings.Split(targetsRaw, ","))
+	renderedTargets := TargetFlags{}
+	logRenderTargets := strings.Join([]string(targetsToRender), ", ")
+	if isAllTargets {
+		logRenderTargets = "ALL"
+	}
+
 	config, err := getConfig()
 	if err != nil {
 		panic(err)
@@ -25,7 +57,17 @@ func main() {
 		apis[a.Label] = a
 	}
 
+	fmt.Printf("Will render target(s): %s\n", logRenderTargets)
 	for _, t := range config.Targets {
+		if !isAllTargets {
+			enabledByFlag := targetsToRender.Includes(t.Label)
+			if !enabledByFlag {
+				continue
+			}
+
+			renderedTargets = append(renderedTargets, t.Label)
+		}
+
 		for _, ta := range t.Apis {
 			a := apis[ta.Label]
 
@@ -100,6 +142,16 @@ func main() {
 					fmt.Println(fmt.Errorf("%+v\n", err))
 					return
 				}
+			}
+		}
+
+		fmt.Printf("Rendered target: %s\n", t.Label)
+	}
+
+	if len(renderedTargets) != len(targetsToRender) {
+		for _, tr := range targetsToRender {
+			if !renderedTargets.Includes(tr) {
+				fmt.Printf("WARN Skipped target: %s because it was not defined\n", tr)
 			}
 		}
 	}
