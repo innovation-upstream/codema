@@ -30,6 +30,18 @@ func (t TargetFlags) Includes(s string) bool {
 	return tail.Includes(s)
 }
 
+func (t TargetFlags) TrimSpace() TargetFlags {
+	if t == nil || len(t) == 0 {
+		return t
+	}
+
+	head := t[0]
+	tail := t[1:]
+	chunk := tail.TrimSpace()
+
+	return append(chunk, strings.TrimSpace(head))
+}
+
 func main() {
 	var targetsRaw string
 	flag.StringVar(&targetsRaw, "t", "*", "Targets to render")
@@ -37,6 +49,8 @@ func main() {
 
 	isAllTargets := targetsRaw == "*"
 	targetsToRender := TargetFlags(strings.Split(targetsRaw, ","))
+	targetsToRender = targetsToRender.TrimSpace()
+
 	renderedTargets := TargetFlags{}
 	logRenderTargets := strings.Join([]string(targetsToRender), ", ")
 	if isAllTargets {
