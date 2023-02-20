@@ -118,10 +118,18 @@ func main() {
 					path := modulePath + pathExpanded
 					tmplPath := templatePath + t.TemplatePath
 
+					isDir, err := isDir(path)
+					if err != nil {
+						panic(err)
+					}
+
+					if isDir {
+						panic(fmt.Sprintf("ERROR: %s is a directory, aborting", path))
+					}
+
 					tmplRaw, err := os.ReadFile(tmplPath)
 					if err != nil {
-						fmt.Println("Error reading file:", err)
-						return
+						panic(fmt.Sprintf("Error reading file: %+v", err))
 					}
 
 					err = renderEachFile(path, string(tmplRaw), a, m)
@@ -144,6 +152,15 @@ func main() {
 				pathExpanded := pathSb.String()
 				path := modulePath + pathExpanded
 				tmplPath := templatePath + t.TemplatePath
+
+				isDir, err := isDir(path)
+				if err != nil {
+					panic(err)
+				}
+
+				if isDir {
+					panic(fmt.Sprintf("ERROR: %s is a directory, aborting", path))
+				}
 
 				tmplRaw, err := os.ReadFile(tmplPath)
 				if err != nil {
@@ -253,4 +270,16 @@ func renderEachFile(
 	os.Chmod(path, 0444)
 
 	return nil
+}
+
+func isDir(path string) (bool, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		// This means the file doesn't exist
+		return false, nil
+	}
+
+	isDir := fileInfo.IsDir()
+
+	return isDir, nil
 }
