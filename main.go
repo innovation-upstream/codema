@@ -116,7 +116,12 @@ func main() {
 
 					pathExpanded := pathSb.String()
 					path := modulePath + pathExpanded
-					tmplPath := templatePath + t.TemplatePath
+					var tmplPath string
+					if t.TemplateDir == "" && ta.Version != "" {
+						tmplPath = templatePath + t.TemplatePath
+					} else {
+						tmplPath = templatePath + t.TemplateDir + "/" + ta.Version + ".template"
+					}
 
 					isDir, err := isDir(path)
 					if err != nil {
@@ -153,7 +158,12 @@ func main() {
 
 				pathExpanded := pathSb.String()
 				path := modulePath + pathExpanded
-				tmplPath := templatePath + t.TemplatePath
+				var tmplPath string
+				if t.TemplateDir == "" && ta.Version != "" {
+					tmplPath = templatePath + t.TemplatePath
+				} else {
+					tmplPath = templatePath + t.TemplateDir + "/" + ta.Version + ".template"
+				}
 
 				isDir, err := isDir(path)
 				if err != nil {

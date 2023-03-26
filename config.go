@@ -36,13 +36,16 @@ type (
 	TargetApi struct {
 		Label      string        `yaml:"label"`
 		OutPath    string        `yaml:"outPath"`
+		Version    string        `yaml:"version"`
 		SkipLabels []string      `yaml:"skipLabels"`
 		Args       TargetApiArgs `yaml:"args"`
 	}
 
 	Target struct {
-		Label        string      `yaml:"label"`
+		Label string `yaml:"label"`
+		// TemplatePath is deprecated, use TemplateDir instead
 		TemplatePath string      `yaml:"templatePath"`
+		TemplateDir  string      `yaml:"templateDir"`
 		Apis         []TargetApi `yaml:"apis"`
 		Each         bool        `yaml:"each"`
 	}
