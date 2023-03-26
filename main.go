@@ -63,7 +63,7 @@ func main() {
 	}
 
 	modulePath := expandModulePath(config.ModuleDir)
-	templatePath := expandTemplatePath(config.TemplateDir)
+	templateBasePath := expandTemplatePath(config.TemplateDir)
 
 	apis := make(map[string]ApiDefinition)
 
@@ -116,11 +116,23 @@ func main() {
 
 					pathExpanded := pathSb.String()
 					path := modulePath + pathExpanded
+					templateVersion := getTemplateVersion(t.DefaultVerion, ta.Version)
+
 					var tmplPath string
-					if t.TemplateDir == "" && ta.Version != "" {
-						tmplPath = templatePath + t.TemplatePath
+					if t.TemplateDir == "" {
+						tmplPath = getLegacyTemplatePath(templateBasePath, t.TemplatePath)
+					} else if templateVersion != "" {
+						tmplPath = getTemplatePath(templateBasePath, t.TemplateDir, templateVersion)
 					} else {
-						tmplPath = templatePath + t.TemplateDir + "/" + ta.Version + ".template"
+						desc := "You specified templateDir without specifing a template version!  You must specify either Target.DefaultVersion or a TargetApi.Version"
+						msg := fmt.Sprintf(
+							"Failed to render target: %s for api: %s. Message: %s",
+							t.Label,
+							ta.Label,
+							desc,
+						)
+						err := errors.New(msg)
+						panic(err)
 					}
 
 					isDir, err := isDir(path)
@@ -158,11 +170,18 @@ func main() {
 
 				pathExpanded := pathSb.String()
 				path := modulePath + pathExpanded
+				templateVersion := getTemplateVersion(t.DefaultVerion, ta.Version)
+
 				var tmplPath string
-				if t.TemplateDir == "" && ta.Version != "" {
-					tmplPath = templatePath + t.TemplatePath
+				if t.TemplateDir == "" {
+					tmplPath = getLegacyTemplatePath(templateBasePath, t.TemplatePath)
+				} else if templateVersion != "" {
+					tmplPath = getTemplatePath(templateBasePath, t.TemplateDir, templateVersion)
 				} else {
-					tmplPath = templatePath + t.TemplateDir + "/" + ta.Version + ".template"
+					err := errors.New(
+						"You specified templateDir without specifing a template version!  You must specify either Target.DefaultVersion or a TargetApi.Version",
+					)
+					panic(err)
 				}
 
 				isDir, err := isDir(path)
@@ -297,4 +316,22 @@ func isDir(path string) (bool, error) {
 	isDir := fileInfo.IsDir()
 
 	return isDir, nil
+}
+
+func getTemplateVersion(defaultVersion, version string) string {
+	if version == "" {
+		return defaultVersion
+	} else {
+		return version
+	}
+}
+
+func getLegacyTemplatePath(basePath, templatePath string) string {
+	tmplPath := basePath + templatePath
+	return tmplPath
+}
+
+func getTemplatePath(basePath, templateDir, templateVersion string) string {
+	tmplPath := basePath + templateDir + "/" + templateVersion + ".template"
+	return tmplPath
 }

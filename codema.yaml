@@ -13,10 +13,10 @@ targets:
   - label: relay
     templateDir: /relay-fn
     each: true
+    defaultVersion: v0.1.0
     apis:
       - label: booking
         outPath: /{{.Label}}/{{.Microservice.Label}}_relay_fn_generated.go
-        version: v0.1.0
 
   - label: grpc
     templatePath: /grpc.template

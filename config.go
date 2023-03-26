@@ -48,6 +48,8 @@ type (
 		TemplateDir  string      `yaml:"templateDir"`
 		Apis         []TargetApi `yaml:"apis"`
 		Each         bool        `yaml:"each"`
+		// DefaultVerion is the default version tag to use for apis that render this target
+		DefaultVerion string `yaml:"defaultVersion"`
 	}
 
 	Config struct {
