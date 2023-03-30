@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"io/ioutil"
@@ -60,7 +60,7 @@ type (
 	}
 )
 
-func getConfig() (*Config, error) {
+func GetConfig() (*Config, error) {
 	data, err := ioutil.ReadFile("codema.yaml")
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -105,7 +105,7 @@ func getConfig() (*Config, error) {
 	return &config, nil
 }
 
-func expandModulePath(modulePathRaw string) string {
+func ExpandModulePath(modulePathRaw string) string {
 	modulePath := os.ExpandEnv(
 		strings.ReplaceAll(modulePathRaw, "~", "$HOME"),
 	)
@@ -113,7 +113,7 @@ func expandModulePath(modulePathRaw string) string {
 	return modulePath
 }
 
-func expandTemplatePath(templatePathRaw string) string {
+func ExpandTemplatePath(templatePathRaw string) string {
 	templatePath := os.ExpandEnv(
 		strings.ReplaceAll(templatePathRaw, "~", "$HOME"),
 	)
