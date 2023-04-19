@@ -18,6 +18,7 @@ type (
 		LabelLowerCamel     string
 		LabelScreaming      string
 		LabelScreamingSnake string
+		LabelSnake          string
 	}
 
 	ApiDefinition struct {
@@ -29,6 +30,7 @@ type (
 		LabelLowerCamel     string
 		LabelScreaming      string
 		LabelScreamingSnake string
+		LabelSnake          string
 	}
 
 	TargetApiArgs map[string]map[string]map[string]string
@@ -79,12 +81,14 @@ func GetConfig() (*Config, error) {
 		apiLabelCamel := strcase.ToCamel(al)
 		apiLabelScreaming := strings.ToUpper(al)
 		apiLabelScreamingSnake := strcase.ToScreamingSnake(al)
+		apiLabelSnake := strcase.ToSnake(al)
 
 		config.Apis[ax].LabelCamel = apiLabelCamel
 		config.Apis[ax].LabelLowerCamel = apiLabelLowerCamel
 		config.Apis[ax].LabelKebab = apiLabelKebab
 		config.Apis[ax].LabelScreaming = apiLabelScreaming
 		config.Apis[ax].LabelScreamingSnake = apiLabelScreamingSnake
+		config.Apis[ax].LabelSnake = apiLabelSnake
 
 		for ix, m := range a.Microservices {
 			l := m.Label
@@ -93,12 +97,14 @@ func GetConfig() (*Config, error) {
 			labelCamel := strcase.ToCamel(l)
 			labelScreaming := strings.ToUpper(l)
 			labelScreamingSnake := strcase.ToScreamingSnake(l)
+			labelSnake := strcase.ToSnake(l)
 
 			config.Apis[ax].Microservices[ix].LabelLowerCamel = labelLowerCamel
 			config.Apis[ax].Microservices[ix].LabelCamel = labelCamel
 			config.Apis[ax].Microservices[ix].LabelKebab = labelKebab
 			config.Apis[ax].Microservices[ix].LabelScreaming = labelScreaming
 			config.Apis[ax].Microservices[ix].LabelScreamingSnake = labelScreamingSnake
+			config.Apis[ax].Microservices[ix].LabelSnake = labelSnake
 		}
 	}
 
