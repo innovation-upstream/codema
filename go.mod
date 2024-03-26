@@ -1,6 +1,6 @@
 module github.com/innovation-upstream/codema
 
-go 1.19
+go 1.21
 
 require (
 	github.com/iancoleman/strcase v0.2.0
