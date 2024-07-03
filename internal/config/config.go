@@ -1,7 +1,6 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -50,8 +49,8 @@ type (
 		TemplateDir  string      `yaml:"templateDir"`
 		Apis         []TargetApi `yaml:"apis"`
 		Each         bool        `yaml:"each"`
-		// DefaultVerion is the default version tag to use for apis that render this target
-		DefaultVerion string `yaml:"defaultVersion"`
+		// DefaultVersion is the default version tag to use for apis that render this target
+		DefaultVersion string `yaml:"defaultVersion"`
 	}
 
 	Config struct {
@@ -62,8 +61,20 @@ type (
 	}
 )
 
-func GetConfig() (*Config, error) {
-	data, err := ioutil.ReadFile("codema.yaml")
+type (
+	ConfigLoader interface {
+		GetConfig() (*Config, error)
+	}
+
+	yamlConfigLoader struct{}
+)
+
+func NewYAMLConfigLoader() ConfigLoader {
+	return &yamlConfigLoader{}
+}
+
+func (l *yamlConfigLoader) GetConfig() (*Config, error) {
+	data, err := os.ReadFile("codema.yaml")
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}

@@ -117,7 +117,7 @@ func (tp *TargetProcessor) getRawTemplate(
 	parentTarget config.Target,
 	path string,
 ) (string, error) {
-	templateVersion := getTemplateVersion(tp.ParentTarget.DefaultVerion, ta.Version)
+	templateVersion := getTemplateVersion(tp.ParentTarget.DefaultVersion, ta.Version)
 	var tmplPath string
 	if tp.ParentTarget.TemplateDir == "" {
 		tmplPath = fs.GetLegacyTemplatePath(tp.TemplatesDir, tp.ParentTarget.TemplatePath)

@@ -41,8 +41,9 @@ func (t TargetFlags) TrimSpace() TargetFlags {
 }
 
 func main() {
-	var targetsRaw string
+	var targetsRaw, configFormatRaw string
 	flag.StringVar(&targetsRaw, "t", "*", "Targets to render")
+	flag.StringVar(&configFormatRaw, "c", "yaml", "Config format. One of: yaml, starlark")
 	flag.Parse()
 
 	isAllTargets := targetsRaw == "*"
@@ -55,7 +56,16 @@ func main() {
 		logRenderTargets = "ALL"
 	}
 
-	cfg, err := config.GetConfig()
+	isYAML := configFormatRaw == "yaml"
+	var cfgLoader config.ConfigLoader
+
+	if isYAML {
+		cfgLoader = config.NewYAMLConfigLoader()
+	} else {
+		cfgLoader = config.NewStarlarkConfigLoader()
+	}
+
+	cfg, err := cfgLoader.GetConfig()
 	if err != nil {
 		panic(err)
 	}
