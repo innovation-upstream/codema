@@ -1,0 +1,31 @@
+package logic
+
+import (
+	"context"
+
+	"github.com/pkg/errors"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/external/model"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/internal/hook"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/internal/repo"
+	"gitlab.com/mobl-dev/subject"
+)
+
+type {{.Microservice.LabelCamel}}Logic interface {
+	{{range .Microservice.FunctionImplementations}}
+	{{.Function.Name}}({{range $index, $param := .Function.Parameters}}{{if $index}}, {{end}}{{$param}} string{{end}}) ({{if eq .Function.Name "Create"}}string, {{end}}error)
+	{{end}}
+}
+
+type {{.Microservice.LabelLowerCamel}}Logic struct {
+	repo repo.{{.Microservice.LabelCamel}}Repo
+	hook hook.{{.Microservice.LabelCamel}}Hook
+}
+
+func New{{.Microservice.LabelCamel}}Logic(repo repo.{{.Microservice.LabelCamel}}Repo, hook hook.{{.Microservice.LabelCamel}}Hook) {{.Microservice.LabelCamel}}Logic {
+	return &{{.Microservice.LabelLowerCamel}}Logic{
+		repo: repo,
+		hook: hook,
+	}
+}
+
+{{/* FUNCTION_IMPLEMENTATIONS */}}

@@ -1,0 +1,18 @@
+func (s *server) Create(ctx context.Context, req *pb.CreateRequest) (*pb.CreateResponse, error) {
+	ctx = bugsnag.StartSession(ctx)
+
+	svc, cleanup, err := s.GetService(ctx)
+	defer cleanup()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	liability := transform.PbToServiceProviderLiabilityPtr(req.GetLiability())
+	id, err := svc.Create(ctx, req.GetSubjectId(), liability)
+	if err != nil {
+		errHelpers.Report(err)
+		return nil, errors.WithStack(err)
+	}
+
+	return &pb.CreateResponse{Id: id}, nil
+}

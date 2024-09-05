@@ -1,0 +1,44 @@
+package repo
+
+import (
+	"context"
+
+	"github.com/pkg/errors"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/external/model"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+)
+
+const {{.Microservice.LabelLowerCamel}}Database = "{{.Microservice.LabelKebab}}-db"
+const {{.Microservice.LabelLowerCamel}}Collection = "{{.Microservice.LabelKebab}}"
+
+type {{.Microservice.LabelCamel}}Repo interface {
+	{{range .Microservice.FunctionImplementations}}
+	{{.Function.Name}}({{range $index, $param := .Function.Parameters}}{{if $index}}, {{end}}{{$param}} string{{end}}) ({{if eq .Function.Name "Create"}}string, {{end}}error)
+	{{end}}
+	GetByID(context.Context, string) (*model.{{.Microservice.LabelCamel}}, error)
+}
+
+type {{.Microservice.LabelLowerCamel}}Repo struct {
+	mdb *mongo.Collection
+}
+
+func New{{.Microservice.LabelCamel}}Repo(db *mongo.Client) {{.Microservice.LabelCamel}}Repo {
+	return &{{.Microservice.LabelLowerCamel}}Repo{
+		mdb: db.Database({{.Microservice.LabelLowerCamel}}Database).Collection({{.Microservice.LabelLowerCamel}}Collection),
+	}
+}
+
+{{/* FUNCTION_IMPLEMENTATIONS */}}
+
+func (r *{{.Microservice.LabelLowerCamel}}Repo) GetByID(ctx context.Context, id string) (*model.{{.Microservice.LabelCamel}}, error) {
+	var item model.{{.Microservice.LabelCamel}}
+	err := r.mdb.FindOne(ctx, bson.M{"id": id}).Decode(&item)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, errors.WithStack(err)
+	}
+	return &item, nil
+}

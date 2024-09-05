@@ -10,14 +10,43 @@ import (
 )
 
 type (
+	FieldDirective map[string]interface{}
+
+	FieldDefinition struct {
+		Name        string                 `yaml:"name"`
+		Type        string                 `yaml:"type"`
+		Description string                 `yaml:"description"`
+		Optional    bool                   `yaml:"optional"`
+		Directives  map[string]interface{} `yaml:"directives"`
+	}
+
+	ModelDefinition struct {
+		Name        string            `yaml:"name"`
+		Fields      []FieldDefinition `yaml:"fields"`
+		Description string            `yaml:"description"`
+	}
+
+	FunctionDefinition struct {
+		Name        string   `yaml:"name"`
+		Parameters  []string `yaml:"parameters"`
+		Description string   `yaml:"description"`
+	}
+
+	FunctionImplementation struct {
+		Function       FunctionDefinition `yaml:"function"`
+		TargetSnippets map[string]string  `yaml:"target_snippets"`
+	}
+
 	MicroserviceDefinition struct {
-		Label               string `yaml:"label"`
-		LabelKebab          string
-		LabelCamel          string
-		LabelLowerCamel     string
-		LabelScreaming      string
-		LabelScreamingSnake string
-		LabelSnake          string
+		Label                   string                   `yaml:"label"`
+		Models                  []ModelDefinition        `yaml:"models"`
+		FunctionImplementations []FunctionImplementation `yaml:"function_implementations"`
+		LabelKebab              string
+		LabelCamel              string
+		LabelLowerCamel         string
+		LabelScreaming          string
+		LabelScreamingSnake     string
+		LabelSnake              string
 	}
 
 	ApiDefinition struct {
@@ -32,25 +61,20 @@ type (
 		LabelSnake          string
 	}
 
-	TargetApiArgs map[string]map[string]map[string]string
-
 	TargetApi struct {
-		Label      string        `yaml:"label"`
-		OutPath    string        `yaml:"outPath"`
-		Version    string        `yaml:"version"`
-		SkipLabels []string      `yaml:"skipLabels"`
-		Args       TargetApiArgs `yaml:"args"`
+		Label      string   `yaml:"label"`
+		OutPath    string   `yaml:"outPath"`
+		Version    string   `yaml:"version"`
+		SkipLabels []string `yaml:"skipLabels"`
 	}
 
 	Target struct {
-		Label string `yaml:"label"`
-		// TemplatePath is deprecated, use TemplateDir instead
-		TemplatePath string      `yaml:"templatePath"`
-		TemplateDir  string      `yaml:"templateDir"`
-		Apis         []TargetApi `yaml:"apis"`
-		Each         bool        `yaml:"each"`
-		// DefaultVersion is the default version tag to use for apis that render this target
-		DefaultVersion string `yaml:"defaultVersion"`
+		Label          string      `yaml:"label"`
+		TemplatePath   string      `yaml:"templatePath"`
+		TemplateDir    string      `yaml:"templateDir"`
+		Apis           []TargetApi `yaml:"apis"`
+		Each           bool        `yaml:"each"`
+		DefaultVersion string      `yaml:"defaultVersion"`
 	}
 
 	Config struct {

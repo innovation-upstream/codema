@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/innovation-upstream/codema/internal/config"
@@ -99,7 +100,8 @@ func main() {
 		for _, ta := range t.Apis {
 			err := ctrl.ProcessTargetApi(ta)
 			if err != nil {
-				panic(err)
+				fmt.Printf("%+v", err)
+				os.Exit(1)
 			}
 		}
 

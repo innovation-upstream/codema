@@ -1,0 +1,48 @@
+package rpc
+
+import (
+	"context"
+
+	"github.com/bugsnag/bugsnag-go"
+	"github.com/innovation-upstream/cloudrun-grpc-dialer/dialer"
+	"github.com/pkg/errors"
+	amqp "github.com/rabbitmq/amqp091-go"
+	modeltypedid "gitlab.com/mobl-dev/helpers/model-typed-id"
+	errHelpers "gitlab.com/mobl-dev/helpers/monitor/error"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/internal/hook"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/internal/logic"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/internal/repo"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/pb"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/pb/transform"
+	"go.mongodb.org/mongo-driver/mongo"
+	"google.golang.org/protobuf/types/known/emptypb"
+)
+
+type server struct {
+	db                    *mongo.Client
+	getRabbitMQConnection func() *amqp.Connection
+	cloudrunGRPCDialer    dialer.CloudrunGRPCDialer
+}
+
+func New(
+	db *mongo.Client,
+	getRabbitMQConnection func() *amqp.Connection,
+	cloudrunGRPCDialer dialer.CloudrunGRPCDialer,
+) pb.{{.Microservice.LabelCamel}}RPCServer {
+	return &server{
+		db:                    db,
+		getRabbitMQConnection: getRabbitMQConnection,
+		cloudrunGRPCDialer:    cloudrunGRPCDialer,
+	}
+}
+
+func (s *server) GetService(ctx context.Context) (logic.{{.Microservice.LabelCamel}}Logic, func(), error) {
+	r := repo.New{{.Microservice.LabelCamel}}Repo(s.db)
+	mtiGen := modeltypedid.NewModelTypedIDGenerator()
+	h := hook.New{{.Microservice.LabelCamel}}Hook(mtiGen)
+	svc := logic.New{{.Microservice.LabelCamel}}Logic(r, h)
+
+	return svc, func() {}, nil
+}
+
+{{/* FUNCTION_IMPLEMENTATIONS */}}

@@ -128,22 +128,23 @@ func fillConfig(c *Config, val starlark.Value) error {
 	return nil
 }
 
+func getStringField(dict *starlark.Dict, key string) (string, error) {
+	value, found, err := dict.Get(starlark.String(key))
+	if err != nil {
+		return "", err
+	}
+	if found {
+		strValue, ok := value.(starlark.String)
+		if !ok {
+			return "", errors.Errorf("%s must be a string", key)
+		}
+		return string(strValue), nil
+	}
+	return "", nil // Return an empty string if not found
+}
+
 func parseApiDefinition(api *ApiDefinition, dict *starlark.Dict) error {
 	// Helper function to get and check string fields
-	getStringField := func(dict *starlark.Dict, key string) (string, error) {
-		value, found, err := dict.Get(starlark.String(key))
-		if err != nil {
-			return "", err
-		}
-		if found {
-			strValue, ok := value.(starlark.String)
-			if !ok {
-				return "", errors.Errorf("%s must be a string", key)
-			}
-			return string(strValue), nil
-		}
-		return "", nil // Return an empty string if not found
-	}
 
 	var err error
 	if api.Package, err = getStringField(dict, "package"); err != nil {
@@ -169,7 +170,6 @@ func parseApiDefinition(api *ApiDefinition, dict *starlark.Dict) error {
 	api.LabelScreamingSnake = apiLabelScreamingSnake
 	api.LabelSnake = apiLabelSnake
 
-	// Parsing microservices array
 	microservicesVal, found, err := dict.Get(starlark.String("microservices"))
 	if err != nil {
 		return err
@@ -186,31 +186,256 @@ func parseApiDefinition(api *ApiDefinition, dict *starlark.Dict) error {
 				return errors.New("each microservice must be a dictionary")
 			}
 			var micro MicroserviceDefinition
-			if micro.Label, err = getStringField(microDict, "label"); err != nil {
+			if err := parseMicroserviceDefinition(&micro, microDict); err != nil {
 				return err
 			}
-
-			// Additional labels derived from 'label'
-			l := micro.Label
-			labelLowerCamel := strcase.ToLowerCamel(l)
-			labelKebab := strcase.ToKebab(l)
-			labelCamel := strcase.ToCamel(l)
-			labelScreaming := strings.ToUpper(l)
-			labelScreamingSnake := strcase.ToScreamingSnake(l)
-			labelSnake := strcase.ToSnake(l)
-
-			micro.LabelKebab = labelKebab
-			micro.LabelCamel = labelCamel
-			micro.LabelLowerCamel = labelLowerCamel
-			micro.LabelScreaming = labelScreaming
-			micro.LabelScreamingSnake = labelScreamingSnake
-			micro.LabelSnake = labelSnake
-
 			api.Microservices = append(api.Microservices, micro)
 		}
 	}
 
 	return nil
+}
+
+func parseMicroserviceDefinition(micro *MicroserviceDefinition, dict *starlark.Dict) error {
+	var err error
+	if micro.Label, err = getStringField(dict, "label"); err != nil {
+		return err
+	}
+
+	// Parse models
+	modelsVal, found, err := dict.Get(starlark.String("models"))
+	if err != nil {
+		return err
+	}
+	if found {
+		modelsList, ok := modelsVal.(*starlark.List)
+		if !ok {
+			return errors.New("models must be a list")
+		}
+		for i := 0; i < modelsList.Len(); i++ {
+			modelItem := modelsList.Index(i)
+			modelDict, ok := modelItem.(*starlark.Dict)
+			if !ok {
+				return errors.New("each model must be a dictionary")
+			}
+			var model ModelDefinition
+			if err := parseModelDefinition(&model, modelDict); err != nil {
+				return err
+			}
+			micro.Models = append(micro.Models, model)
+		}
+	}
+
+	// Parse function implementations
+	funcImplVal, found, err := dict.Get(starlark.String("function_implementations"))
+	if err != nil {
+		return err
+	}
+	if found {
+		funcImplList, ok := funcImplVal.(*starlark.List)
+		if !ok {
+			return errors.New("function_implementations must be a list")
+		}
+		for i := 0; i < funcImplList.Len(); i++ {
+			funcImplItem := funcImplList.Index(i)
+			funcImplDict, ok := funcImplItem.(*starlark.Dict)
+			if !ok {
+				return errors.New("each function implementation must be a dictionary")
+			}
+			var funcImpl FunctionImplementation
+			if err := parseFunctionImplementation(&funcImpl, funcImplDict); err != nil {
+				return err
+			}
+			micro.FunctionImplementations = append(micro.FunctionImplementations, funcImpl)
+		}
+	}
+
+	// Additional labels
+	l := micro.Label
+	micro.LabelKebab = strcase.ToKebab(l)
+	micro.LabelCamel = strcase.ToCamel(l)
+	micro.LabelLowerCamel = strcase.ToLowerCamel(l)
+	micro.LabelScreaming = strings.ToUpper(l)
+	micro.LabelScreamingSnake = strcase.ToScreamingSnake(l)
+	micro.LabelSnake = strcase.ToSnake(l)
+
+	return nil
+}
+
+func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
+	var err error
+	if model.Name, err = getStringField(dict, "name"); err != nil {
+		return err
+	}
+	if model.Description, err = getStringField(dict, "description"); err != nil {
+		return err
+	}
+
+	// Parse fields
+	fieldsVal, found, err := dict.Get(starlark.String("fields"))
+	if err != nil {
+		return err
+	}
+	if found {
+		fieldsList, ok := fieldsVal.(*starlark.List)
+		if !ok {
+			return errors.New("fields must be a list")
+		}
+		for i := 0; i < fieldsList.Len(); i++ {
+			fieldItem := fieldsList.Index(i)
+			fieldDict, ok := fieldItem.(*starlark.Dict)
+			if !ok {
+				return errors.New("each field must be a dictionary")
+			}
+			var field FieldDefinition
+			if err := parseFieldDefinition(&field, fieldDict); err != nil {
+				return err
+			}
+			model.Fields = append(model.Fields, field)
+		}
+	}
+
+	return nil
+}
+
+func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict) error {
+	var err error
+	if field.Name, err = getStringField(dict, "name"); err != nil {
+		return err
+	}
+	if field.Type, err = getStringField(dict, "type"); err != nil {
+		return err
+	}
+	if field.Description, err = getStringField(dict, "description"); err != nil {
+		return err
+	}
+
+	optionalVal, found, err := dict.Get(starlark.String("optional"))
+	if err != nil {
+		return err
+	}
+	if found {
+		optionalBool, ok := optionalVal.(starlark.Bool)
+		if !ok {
+			return errors.New("optional must be a boolean")
+		}
+		field.Optional = bool(optionalBool)
+	}
+
+	// Parse directives
+	directivesVal, found, err := dict.Get(starlark.String("directives"))
+	if err != nil {
+		return err
+	}
+	if found {
+		directivesDict, ok := directivesVal.(*starlark.Dict)
+		if !ok {
+			return errors.New("directives must be a dictionary")
+		}
+		field.Directives = make(map[string]interface{})
+		for _, item := range directivesDict.Items() {
+			key, value := item[0].(starlark.String), item[1]
+			field.Directives[string(key)] = starlarkValueToGo(value)
+		}
+	}
+
+	return nil
+}
+
+func parseFunctionDefinition(function *FunctionDefinition, dict *starlark.Dict) error {
+	var err error
+	if function.Name, err = getStringField(dict, "name"); err != nil {
+		return err
+	}
+	if function.Description, err = getStringField(dict, "description"); err != nil {
+		return err
+	}
+
+	// Parse parameters
+	parametersVal, found, err := dict.Get(starlark.String("parameters"))
+	if err != nil {
+		return err
+	}
+	if found {
+		parametersList, ok := parametersVal.(*starlark.List)
+		if !ok {
+			return errors.New("parameters must be a list")
+		}
+		for i := 0; i < parametersList.Len(); i++ {
+			paramItem := parametersList.Index(i)
+			paramStr, ok := paramItem.(starlark.String)
+			if !ok {
+				return errors.New("each parameter must be a string")
+			}
+			function.Parameters = append(function.Parameters, string(paramStr))
+		}
+	}
+
+	return nil
+}
+
+func parseFunctionImplementation(funcImpl *FunctionImplementation, dict *starlark.Dict) error {
+	functionVal, found, err := dict.Get(starlark.String("function"))
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errors.New("function is required in function implementation")
+	}
+	functionDict, ok := functionVal.(*starlark.Dict)
+	if !ok {
+		return errors.New("function must be a dictionary")
+	}
+	if err := parseFunctionDefinition(&funcImpl.Function, functionDict); err != nil {
+		return err
+	}
+
+	targetSnippetsVal, found, err := dict.Get(starlark.String("target_snippets"))
+	if err != nil {
+		return err
+	}
+	if found {
+		targetSnippetsDict, ok := targetSnippetsVal.(*starlark.Dict)
+		if !ok {
+			return errors.New("target_snippets must be a dictionary")
+		}
+		funcImpl.TargetSnippets = make(map[string]string)
+		for _, item := range targetSnippetsDict.Items() {
+			key, value := item[0].(starlark.String), item[1].(starlark.String)
+			funcImpl.TargetSnippets[string(key)] = string(value)
+		}
+	}
+
+	return nil
+}
+
+func starlarkValueToGo(v starlark.Value) interface{} {
+	switch v := v.(type) {
+	case starlark.Bool:
+		return bool(v)
+	case starlark.Int:
+		i, _ := v.Int64()
+		return i
+	case starlark.Float:
+		return float64(v)
+	case starlark.String:
+		return string(v)
+	case *starlark.List:
+		result := make([]interface{}, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			result[i] = starlarkValueToGo(v.Index(i))
+		}
+		return result
+	case *starlark.Dict:
+		result := make(map[string]interface{})
+		for _, item := range v.Items() {
+			key, value := item[0].(starlark.String), item[1]
+			result[string(key)] = starlarkValueToGo(value)
+		}
+		return result
+	default:
+		return nil
+	}
 }
 
 func parseTarget(target *Target, dict *starlark.Dict) error {

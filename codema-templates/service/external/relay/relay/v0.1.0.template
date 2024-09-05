@@ -1,0 +1,38 @@
+package relay
+
+import (
+	"context"
+
+	"github.com/innovation-upstream/cloudrun-grpc-dialer/auth"
+	"github.com/pkg/errors"
+	model "gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/external/model"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/pb"
+	"gitlab.com/mobl-dev/service/{{.Api.LabelKebab}}/{{.Microservice.LabelKebab}}/pb/transform"
+	"google.golang.org/grpc"
+)
+
+type {{.Microservice.LabelCamel}}Relay interface {
+	{{range .Microservice.FunctionImplementations}}
+	{{.Function.Name}}({{range $index, $param := .Function.Parameters}}{{if $index}}, {{end}}{{$param}} string{{end}}) ({{if eq .Function.Name "Create"}}string, {{end}}error)
+	{{end}}
+}
+
+type {{.Microservice.LabelLowerCamel}}Relay struct {
+	client           pb.{{.Microservice.LabelCamel}}RPCClient
+	authorizeContext auth.AuthenticateGRPCContextFn
+}
+
+type {{.Microservice.LabelCamel}}RelayFactoryWithDialer func(context.Context, *grpc.ClientConn, auth.AuthenticateGRPCContextFn) {{.Microservice.LabelCamel}}Relay
+
+func New{{.Microservice.LabelCamel}}Relay(
+	ctx context.Context,
+	conn *grpc.ClientConn,
+	authorizeContext auth.AuthenticateGRPCContextFn,
+) {{.Microservice.LabelCamel}}Relay {
+	return &{{.Microservice.LabelLowerCamel}}Relay{
+		client:           pb.New{{.Microservice.LabelCamel}}RPCClient(conn),
+		authorizeContext: authorizeContext,
+	}
+}
+
+{{/* FUNCTION_IMPLEMENTATIONS */}}

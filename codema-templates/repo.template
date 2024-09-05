@@ -82,11 +82,7 @@ func (r *{{.Microservice.LabelLowerCamel}}Repo) Update(
 			"uid": bson.M{"$eq": uid},
 		},
 		bson.D{
-			{Key: "$set", Value: bson.D{
-        {{ range $k, $v := .Args.UpdateableFieldsBsonToGoFieldMap -}}
-        {Key: "{{$k}}", Value: data.{{$v}}},
-        {{ end -}}
-      }},
+			{Key: "$set", Value: bson.D{}},
 		},
 	)
 	if err != nil {

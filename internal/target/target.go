@@ -3,7 +3,9 @@ package target
 import (
 	"fmt"
 	"go/format"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	goTmpl "text/template"
@@ -72,9 +74,7 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) err
 				return errors.WithStack(err)
 			}
 
-			args := ta.Args[m.Label]
-
-			err = renderEachFile(msOutFilePath, targetTmplRaw, a, m, args)
+			err = renderEachFile(msOutFilePath, targetTmplRaw, a, m, ctrl.ParentTarget.Label, ctrl.TemplatesDir)
 			if err != nil {
 				return errors.WithStack(err)
 			}
@@ -156,45 +156,61 @@ func renderEachFile(
 	path, templateRaw string,
 	api config.ApiDefinition,
 	ms config.MicroserviceDefinition,
-	args map[string]map[string]string,
+	targetLabel string,
+	templatesDir string,
 ) error {
+	// Create the directory structure
+	dir := filepath.Dir(path)
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return errors.Wrap(err, "failed to create directory structure")
+	}
+
 	os.Chmod(path, 0666)
 	file, err := os.Create(path)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	defer file.Close()
 
+	// Inject function implementation snippets
+	templateRaw, err = injectFunctionImplementationSnippets(templateRaw, ms, targetLabel, templatesDir)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
 	tmpl, err := goTmpl.New(path).Parse(templateRaw)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	var sb strings.Builder
 	err = tmpl.Execute(&sb, struct {
 		Api          config.ApiDefinition
 		Microservice config.MicroserviceDefinition
-		Args         map[string]map[string]string
 	}{
 		Api:          api,
 		Microservice: ms,
-		Args:         args,
 	})
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	tmpResult := sb.String()
+	resultToWrite := tmpResult
+
 	fmtResult, err := format.Source([]byte(tmpResult))
-	if err != nil {
-		return err
+	if err == nil {
+		resultToWrite = string(fmtResult)
+	} else {
+		slog.Warn("failed to format as go file", slog.String("path", path), slog.String("error", err.Error()))
 	}
 
-	result := strings.TrimSpace(string(fmtResult))
+	result := strings.TrimSpace(resultToWrite)
 
 	_, err = file.WriteString(result)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	os.Chmod(path, 0444)
@@ -202,7 +218,39 @@ func renderEachFile(
 	return nil
 }
 
+func injectFunctionImplementationSnippets(
+	templateRaw string,
+	ms config.MicroserviceDefinition,
+	targetLabel string,
+	templatesDir string,
+) (string, error) {
+	for _, funcImpl := range ms.FunctionImplementations {
+		snippetPath, ok := funcImpl.TargetSnippets[targetLabel]
+		if !ok {
+			continue
+		}
+
+		fullSnippetPath := templatesDir + snippetPath
+		snippetContent, err := os.ReadFile(fullSnippetPath)
+		if err != nil {
+			return "", errors.Wrap(err, fmt.Sprintf("Error reading snippet file: %s", fullSnippetPath))
+		}
+
+		placeholderTag := "{{/* FUNCTION_IMPLEMENTATIONS */}}"
+		templateRaw = strings.Replace(templateRaw, placeholderTag, placeholderTag+"\n"+string(snippetContent), 1)
+	}
+
+	return templateRaw, nil
+}
+
 func renderSingleFile(path, templateStr string, api config.ApiDefinition) error {
+	// Create the directory structure
+	dir := filepath.Dir(path)
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		return errors.Wrap(err, "failed to create directory structure")
+	}
+
 	os.Chmod(path, 0666)
 	file, err := os.Create(path)
 	if err != nil {

@@ -1,0 +1,18 @@
+func (s *serviceProviderLiabilityLogic) Create(ctx context.Context, subjectID string, liability *model.ServiceProviderLiability) (string, error) {
+	liability, err := s.hook.OnPreCreate(ctx, subjectID, liability)
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+
+	err = s.repo.Create(ctx, liability)
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+
+	err = s.hook.OnPostCreate(ctx, liability)
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+
+	return liability.ID, nil
+}
