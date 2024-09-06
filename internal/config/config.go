@@ -20,9 +20,16 @@ type (
 		Directives  map[string]interface{} `yaml:"directives"`
 	}
 
+	EnumDefinition struct {
+		Name        string   `yaml:"name"`
+		Values      []string `yaml:"values"`
+		Description string   `yaml:"description"`
+	}
+
 	ModelDefinition struct {
 		Name        string            `yaml:"name"`
 		Fields      []FieldDefinition `yaml:"fields"`
+		Enums       []EnumDefinition  `yaml:"enums"`
 		Description string            `yaml:"description"`
 	}
 
@@ -133,7 +140,7 @@ func (l *yamlConfigLoader) GetConfig() (*Config, error) {
 		for ix, m := range a.Microservices {
 			for mx, model := range m.Models {
 				for fx, field := range model.Fields {
-					if err := validateFieldType(field.Type); err != nil {
+					if err := validateFieldType(field.Type, model.Enums); err != nil {
 						return nil, errors.Wrapf(err, "invalid field type for %s.%s", m.Label, field.Name)
 					}
 					config.Apis[ax].Microservices[ix].Models[mx].Fields[fx] = field
@@ -176,7 +183,7 @@ func ExpandTemplatePath(templatePathRaw string) string {
 	return templatePath
 }
 
-func validateFieldType(fieldType string) error {
+func validateFieldType(fieldType string, enums []EnumDefinition) error {
 	validTypes := map[string]bool{
 		"Int": true, "Float": true, "String": true, "Boolean": true, "ID": true, "DateTime": true,
 	}
@@ -187,7 +194,14 @@ func validateFieldType(fieldType string) error {
 
 	if strings.HasPrefix(fieldType, "[") && strings.HasSuffix(fieldType, "]") {
 		innerType := fieldType[1 : len(fieldType)-1]
-		return validateFieldType(innerType)
+		return validateFieldType(innerType, enums)
+	}
+
+	// Check if the type is a defined enum
+	for _, enum := range enums {
+		if enum.Name == fieldType {
+			return nil
+		}
 	}
 
 	return errors.Errorf("invalid field type: %s", fieldType)

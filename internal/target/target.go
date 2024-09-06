@@ -245,10 +245,10 @@ func injectFunctionImplementationSnippets(
 		}
 
 		placeholderTag := "{{/* FUNCTION_IMPLEMENTATIONS */}}"
-		templateRaw = strings.Replace(templateRaw, placeholderTag, placeholderTag+"\n"+string(snippetContent), 1)
+		templateRaw = strings.Replace(templateRaw, placeholderTag, string(snippetContent)+placeholderTag, 1)
 
 		importsPlaceholderTag := "{{/* FUNCTION_IMPORTS */}}"
-		templateRaw = strings.Replace(templateRaw, importsPlaceholderTag, importsPlaceholderTag+"\n"+string(importsContent), 1)
+		templateRaw = strings.Replace(templateRaw, importsPlaceholderTag, string(importsContent)+importsPlaceholderTag, 1)
 	}
 
 	return templateRaw, nil
@@ -300,12 +300,13 @@ func renderSingleFile(path, templateStr string, api config.ApiDefinition) error 
 
 func templateFuncs() goTmpl.FuncMap {
 	return goTmpl.FuncMap{
-		"protoType": mapToProtoType,
-		"mapGoType": mapGoType,
-		"add":       func(a, b int) int { return a + b },
-		"titleCase": strcase.ToCamel,
-		"snakecase": strcase.ToSnake,
-		"camelcase": strcase.ToLowerCamel,
+		"protoType":                     mapToProtoType,
+		"mapGoType":                     mapGoType,
+		"mapGoTypeWithCustomTypePrefix": mapGoTypeWithCustomTypePrefix,
+		"add":                           func(a, b int) int { return a + b },
+		"titleCase":                     strcase.ToCamel,
+		"snakecase":                     strcase.ToSnake,
+		"camelcase":                     strcase.ToLowerCamel,
 	}
 }
 
@@ -346,5 +347,25 @@ func mapGoType(codemaType string) string {
 			return "[]" + mapGoType(codemaType[1:len(codemaType)-1])
 		}
 		return codemaType // For custom types, use as-is
+	}
+}
+
+func mapGoTypeWithCustomTypePrefix(codemaType string, customTypePrefix string) string {
+	switch codemaType {
+	case "ID", "String":
+		return "string"
+	case "Int":
+		return "int64"
+	case "Float":
+		return "float64"
+	case "Boolean":
+		return "bool"
+	case "DateTime":
+		return "time.Time"
+	default:
+		if strings.HasPrefix(codemaType, "[") && strings.HasSuffix(codemaType, "]") {
+			return "[]" + mapGoType(codemaType[1:len(codemaType)-1])
+		}
+		return customTypePrefix + codemaType
 	}
 }

@@ -305,6 +305,30 @@ func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
 		return err
 	}
 
+	// Parse enums
+	enumsVal, found, err := dict.Get(starlark.String("enums"))
+	if err != nil {
+		return err
+	}
+	if found {
+		enumsList, ok := enumsVal.(*starlark.List)
+		if !ok {
+			return errors.New("enums must be a list")
+		}
+		for i := 0; i < enumsList.Len(); i++ {
+			enumItem := enumsList.Index(i)
+			enumDict, ok := enumItem.(*starlark.Dict)
+			if !ok {
+				return errors.New("each enum must be a dictionary")
+			}
+			var enum EnumDefinition
+			if err := parseEnumDefinition(&enum, enumDict); err != nil {
+				return err
+			}
+			model.Enums = append(model.Enums, enum)
+		}
+	}
+
 	// Parse fields
 	fieldsVal, found, err := dict.Get(starlark.String("fields"))
 	if err != nil {
@@ -322,7 +346,7 @@ func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
 				return errors.New("each field must be a dictionary")
 			}
 			var field FieldDefinition
-			if err := parseFieldDefinition(&field, fieldDict); err != nil {
+			if err := parseFieldDefinition(&field, fieldDict, model.Enums); err != nil {
 				return err
 			}
 			model.Fields = append(model.Fields, field)
@@ -332,7 +356,39 @@ func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
 	return nil
 }
 
-func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict) error {
+func parseEnumDefinition(enum *EnumDefinition, dict *starlark.Dict) error {
+	var err error
+	if enum.Name, err = getStringField(dict, "name"); err != nil {
+		return err
+	}
+	if enum.Description, err = getStringField(dict, "description"); err != nil {
+		return err
+	}
+
+	// Parse values
+	valuesVal, found, err := dict.Get(starlark.String("values"))
+	if err != nil {
+		return err
+	}
+	if found {
+		valuesList, ok := valuesVal.(*starlark.List)
+		if !ok {
+			return errors.New("enum values must be a list")
+		}
+		for i := 0; i < valuesList.Len(); i++ {
+			valueItem := valuesList.Index(i)
+			valueStr, ok := valueItem.(starlark.String)
+			if !ok {
+				return errors.New("each enum value must be a string")
+			}
+			enum.Values = append(enum.Values, string(valueStr))
+		}
+	}
+
+	return nil
+}
+
+func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict, enums []EnumDefinition) error {
 	var err error
 	if field.Name, err = getStringField(dict, "name"); err != nil {
 		return err
@@ -340,7 +396,7 @@ func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict) error {
 	if field.Type, err = getStringField(dict, "type"); err != nil {
 		return err
 	}
-	if err := validateFieldType(field.Type); err != nil {
+	if err := validateFieldType(field.Type, enums); err != nil {
 		return errors.Wrapf(err, "invalid field type for %s", field.Name)
 	}
 	if field.Description, err = getStringField(dict, "description"); err != nil {
