@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/iancoleman/strcase"
@@ -10,22 +11,21 @@ import (
 	"go.starlark.net/syntax"
 )
 
-type starlarkConfigLoader struct{}
+type starlarkConfigLoader struct {
+	baseDir string
+	cache   map[string]starlark.StringDict
+}
 
 func NewStarlarkConfigLoader() ConfigLoader {
-	return &starlarkConfigLoader{}
+	return &starlarkConfigLoader{
+		baseDir: ".",
+		cache:   make(map[string]starlark.StringDict),
+	}
 }
 
 func (l *starlarkConfigLoader) GetConfig() (*Config, error) {
-	// Load the Starlark file
-	data, err := os.ReadFile("codema.star")
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	// Initialize a Starlark thread and environment
-	thread := &starlark.Thread{Name: "main"}
-	globals, err := starlark.ExecFileOptions(syntax.LegacyFileOptions(), thread, "config.star", string(data), nil)
+	// Load the main Starlark file
+	globals, err := l.loadFile("codema.star")
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -43,6 +43,40 @@ func (l *starlarkConfigLoader) GetConfig() (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func (l *starlarkConfigLoader) loadFile(filename string) (starlark.StringDict, error) {
+	// Check if the file has already been loaded
+	if globals, ok := l.cache[filename]; ok {
+		return globals, nil
+	}
+
+	// Read the Starlark file
+	data, err := os.ReadFile(filepath.Join(l.baseDir, filename))
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	// Initialize a Starlark thread with a custom load function
+	thread := &starlark.Thread{
+		Name: filename,
+		Load: l.load,
+	}
+
+	// Execute the Starlark file
+	globals, err := starlark.ExecFileOptions(syntax.LegacyFileOptions(), thread, filename, data, nil)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	// Cache the result
+	l.cache[filename] = globals
+
+	return globals, nil
+}
+
+func (l *starlarkConfigLoader) load(_ *starlark.Thread, module string) (starlark.StringDict, error) {
+	return l.loadFile(module)
 }
 
 func fillConfig(c *Config, val starlark.Value) error {
@@ -306,6 +340,9 @@ func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict) error {
 	if field.Type, err = getStringField(dict, "type"); err != nil {
 		return err
 	}
+	if err := validateFieldType(field.Type); err != nil {
+		return errors.Wrapf(err, "invalid field type for %s", field.Name)
+	}
 	if field.Description, err = getStringField(dict, "description"); err != nil {
 		return err
 	}
@@ -399,10 +436,15 @@ func parseFunctionImplementation(funcImpl *FunctionImplementation, dict *starlar
 		if !ok {
 			return errors.New("target_snippets must be a dictionary")
 		}
-		funcImpl.TargetSnippets = make(map[string]string)
+		funcImpl.TargetSnippets = make(map[string]SnippetPaths)
 		for _, item := range targetSnippetsDict.Items() {
-			key, value := item[0].(starlark.String), item[1].(starlark.String)
-			funcImpl.TargetSnippets[string(key)] = string(value)
+			key, value := item[0].(starlark.String), item[1].(*starlark.Dict)
+			contentPath, _, _ := value.Get(starlark.String("content_path"))
+			importsPath, _, _ := value.Get(starlark.String("imports_path"))
+			funcImpl.TargetSnippets[string(key)] = SnippetPaths{
+				ContentPath: contentPath.(starlark.String).GoString(),
+				ImportsPath: importsPath.(starlark.String).GoString(),
+			}
 		}
 	}
 

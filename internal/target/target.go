@@ -10,6 +10,7 @@ import (
 
 	goTmpl "text/template"
 
+	"github.com/iancoleman/strcase"
 	"github.com/innovation-upstream/codema/internal/config"
 	"github.com/innovation-upstream/codema/internal/fs"
 	"github.com/innovation-upstream/codema/internal/template"
@@ -179,7 +180,7 @@ func renderEachFile(
 		return errors.WithStack(err)
 	}
 
-	tmpl, err := goTmpl.New(path).Parse(templateRaw)
+	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateRaw)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -225,19 +226,29 @@ func injectFunctionImplementationSnippets(
 	templatesDir string,
 ) (string, error) {
 	for _, funcImpl := range ms.FunctionImplementations {
-		snippetPath, ok := funcImpl.TargetSnippets[targetLabel]
+		snippetPaths, ok := funcImpl.TargetSnippets[targetLabel]
 		if !ok {
 			continue
 		}
 
-		fullSnippetPath := templatesDir + snippetPath
+		fullSnippetPath := templatesDir + snippetPaths.ContentPath
 		snippetContent, err := os.ReadFile(fullSnippetPath)
 		if err != nil {
 			return "", errors.Wrap(err, fmt.Sprintf("Error reading snippet file: %s", fullSnippetPath))
 		}
 
+		fullImportsPath := templatesDir + snippetPaths.ImportsPath
+		importsContent, err := os.ReadFile(fullImportsPath)
+		if err != nil {
+			// If imports file doesn't exist, continue without it
+			importsContent = []byte("")
+		}
+
 		placeholderTag := "{{/* FUNCTION_IMPLEMENTATIONS */}}"
 		templateRaw = strings.Replace(templateRaw, placeholderTag, placeholderTag+"\n"+string(snippetContent), 1)
+
+		importsPlaceholderTag := "{{/* FUNCTION_IMPORTS */}}"
+		templateRaw = strings.Replace(templateRaw, importsPlaceholderTag, importsPlaceholderTag+"\n"+string(importsContent), 1)
 	}
 
 	return templateRaw, nil
@@ -285,4 +296,55 @@ func renderSingleFile(path, templateStr string, api config.ApiDefinition) error 
 	os.Chmod(path, 0444)
 
 	return nil
+}
+
+func templateFuncs() goTmpl.FuncMap {
+	return goTmpl.FuncMap{
+		"protoType": mapToProtoType,
+		"mapGoType": mapGoType,
+		"add":       func(a, b int) int { return a + b },
+		"titleCase": strcase.ToCamel,
+		"snakecase": strcase.ToSnake,
+		"camelcase": strcase.ToLowerCamel,
+	}
+}
+
+func mapToProtoType(codemaType string) string {
+	switch codemaType {
+	case "ID", "String":
+		return "string"
+	case "Int":
+		return "int64"
+	case "Float":
+		return "double"
+	case "Boolean":
+		return "bool"
+	case "DateTime":
+		return "google.protobuf.Timestamp"
+	default:
+		if strings.HasPrefix(codemaType, "[") && strings.HasSuffix(codemaType, "]") {
+			return "repeated " + mapToProtoType(codemaType[1:len(codemaType)-1])
+		}
+		return codemaType // For custom types, use as-is
+	}
+}
+
+func mapGoType(codemaType string) string {
+	switch codemaType {
+	case "ID", "String":
+		return "string"
+	case "Int":
+		return "int64"
+	case "Float":
+		return "float64"
+	case "Boolean":
+		return "bool"
+	case "DateTime":
+		return "time.Time"
+	default:
+		if strings.HasPrefix(codemaType, "[") && strings.HasSuffix(codemaType, "]") {
+			return "[]" + mapGoType(codemaType[1:len(codemaType)-1])
+		}
+		return codemaType // For custom types, use as-is
+	}
 }

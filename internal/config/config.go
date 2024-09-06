@@ -32,9 +32,14 @@ type (
 		Description string   `yaml:"description"`
 	}
 
+	SnippetPaths struct {
+		ContentPath string
+		ImportsPath string
+	}
+
 	FunctionImplementation struct {
-		Function       FunctionDefinition `yaml:"function"`
-		TargetSnippets map[string]string  `yaml:"target_snippets"`
+		Function       FunctionDefinition
+		TargetSnippets map[string]SnippetPaths
 	}
 
 	MicroserviceDefinition struct {
@@ -126,6 +131,15 @@ func (l *yamlConfigLoader) GetConfig() (*Config, error) {
 		config.Apis[ax].LabelSnake = apiLabelSnake
 
 		for ix, m := range a.Microservices {
+			for mx, model := range m.Models {
+				for fx, field := range model.Fields {
+					if err := validateFieldType(field.Type); err != nil {
+						return nil, errors.Wrapf(err, "invalid field type for %s.%s", m.Label, field.Name)
+					}
+					config.Apis[ax].Microservices[ix].Models[mx].Fields[fx] = field
+				}
+			}
+
 			l := m.Label
 			labelLowerCamel := strcase.ToLowerCamel(l)
 			labelKebab := strcase.ToKebab(l)
@@ -160,4 +174,21 @@ func ExpandTemplatePath(templatePathRaw string) string {
 	)
 
 	return templatePath
+}
+
+func validateFieldType(fieldType string) error {
+	validTypes := map[string]bool{
+		"Int": true, "Float": true, "String": true, "Boolean": true, "ID": true, "DateTime": true,
+	}
+
+	if validTypes[fieldType] {
+		return nil
+	}
+
+	if strings.HasPrefix(fieldType, "[") && strings.HasSuffix(fieldType, "]") {
+		innerType := fieldType[1 : len(fieldType)-1]
+		return validateFieldType(innerType)
+	}
+
+	return errors.Errorf("invalid field type: %s", fieldType)
 }
