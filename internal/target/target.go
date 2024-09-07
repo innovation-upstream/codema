@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	goTmpl "text/template"
@@ -188,6 +189,8 @@ func (ctrl *TargetProcessorController) renderEachFile(
 		return errors.WithStack(err)
 	}
 
+	templateRaw = preprocessTemplate(templateRaw, ms)
+
 	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateRaw)
 	if err != nil {
 		return errors.WithStack(err)
@@ -278,6 +281,8 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 		return err
 	}
 	defer file.Close()
+
+	templateStr = preprocessTemplate(templateStr, config.MicroserviceDefinition{})
 
 	tmpl, err := goTmpl.New(path).Parse(templateStr)
 	if err != nil {
@@ -381,4 +386,30 @@ func mapGoTypeWithCustomTypePrefix(codemaType string, customTypePrefix string) s
 		}
 		return customTypePrefix + codemaType
 	}
+}
+
+func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) string {
+	// Replace @PM# or @PrimaryModel# followed by a tag name
+	re := regexp.MustCompile(`\{\{(.*)#(\w+).*}}`)
+	templateStr = re.ReplaceAllStringFunc(templateStr, func(match string) string {
+		groups := re.FindStringSubmatch(match)
+		before := groups[1]
+		tagName := groups[2]
+
+		for _, field := range ms.PrimaryModel.Fields {
+			for _, tag := range field.Tags {
+				if tag.Name == tagName {
+					return "{{ " + before + " }}." + field.Name
+				}
+			}
+		}
+
+		return match // If no matching tag is found, return the original match
+	})
+
+	// Replace @PM or @PrimaryModel with {{ .Microservice.PrimaryModel }}
+	re = regexp.MustCompile(`@PM|@PrimaryModel`)
+	templateStr = re.ReplaceAllString(templateStr, ".Microservice.PrimaryModel")
+
+	return templateStr
 }

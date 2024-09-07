@@ -236,27 +236,42 @@ func parseMicroserviceDefinition(micro *MicroserviceDefinition, dict *starlark.D
 		return err
 	}
 
-	// Parse models
-	modelsVal, found, err := dict.Get(starlark.String("models"))
+	// Parse primary model
+	primaryModelVal, found, err := dict.Get(starlark.String("primary_model"))
 	if err != nil {
 		return err
 	}
 	if found {
-		modelsList, ok := modelsVal.(*starlark.List)
+		primaryModelDict, ok := primaryModelVal.(*starlark.Dict)
 		if !ok {
-			return errors.New("models must be a list")
+			return errors.New("primary_model must be a dictionary")
 		}
-		for i := 0; i < modelsList.Len(); i++ {
-			modelItem := modelsList.Index(i)
-			modelDict, ok := modelItem.(*starlark.Dict)
+		if err := parseModelDefinition(&micro.PrimaryModel, primaryModelDict); err != nil {
+			return err
+		}
+	}
+
+	// Parse secondary models
+	secondaryModelsVal, found, err := dict.Get(starlark.String("secondary_models"))
+	if err != nil {
+		return err
+	}
+	if found {
+		secondaryModelsList, ok := secondaryModelsVal.(*starlark.List)
+		if !ok {
+			return errors.New("secondary_models must be a list")
+		}
+		for i := 0; i < secondaryModelsList.Len(); i++ {
+			secondaryModelItem := secondaryModelsList.Index(i)
+			secondaryModelDict, ok := secondaryModelItem.(*starlark.Dict)
 			if !ok {
-				return errors.New("each model must be a dictionary")
+				return errors.New("each secondary model must be a dictionary")
 			}
-			var model ModelDefinition
-			if err := parseModelDefinition(&model, modelDict); err != nil {
+			var secondaryModel SecondaryModel
+			if err := parseSecondaryModel(&secondaryModel, secondaryModelDict); err != nil {
 				return err
 			}
-			micro.Models = append(micro.Models, model)
+			micro.SecondaryModels = append(micro.SecondaryModels, secondaryModel)
 		}
 	}
 
@@ -292,6 +307,39 @@ func parseMicroserviceDefinition(micro *MicroserviceDefinition, dict *starlark.D
 	micro.LabelScreaming = strings.ToUpper(l)
 	micro.LabelScreamingSnake = strcase.ToScreamingSnake(l)
 	micro.LabelSnake = strcase.ToSnake(l)
+
+	return nil
+}
+
+func parseSecondaryModel(secondaryModel *SecondaryModel, dict *starlark.Dict) error {
+	modelVal, found, err := dict.Get(starlark.String("model"))
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errors.New("model is required in secondary model")
+	}
+	modelDict, ok := modelVal.(*starlark.Dict)
+	if !ok {
+		return errors.New("model must be a dictionary")
+	}
+	if err := parseModelDefinition(&secondaryModel.Model, modelDict); err != nil {
+		return err
+	}
+
+	typeVal, found, err := dict.Get(starlark.String("type"))
+	if err != nil {
+		return err
+	}
+	if found {
+		typeStr, ok := typeVal.(starlark.String)
+		if !ok {
+			return errors.New("type must be a string")
+		}
+		secondaryModel.Type = SecondaryModelType(typeStr)
+	} else {
+		secondaryModel.Type = SecondaryModelTypeUnspecified
+	}
 
 	return nil
 }
@@ -430,6 +478,52 @@ func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict, enums []E
 			key, value := item[0].(starlark.String), item[1]
 			field.Directives[string(key)] = starlarkValueToGo(value)
 		}
+	}
+
+	tagsVal, found, err := dict.Get(starlark.String("tags"))
+	if err != nil {
+		return err
+	}
+	if found {
+		tagsList, ok := tagsVal.(*starlark.List)
+		if !ok {
+			return errors.New("tags must be a list")
+		}
+		for i := 0; i < tagsList.Len(); i++ {
+			tagItem := tagsList.Index(i)
+			tagDict, ok := tagItem.(*starlark.Dict)
+			if !ok {
+				return errors.New("each tag must be a dictionary")
+			}
+			var tag TagDefinition
+			if err := parseTagDefinition(&tag, tagDict); err != nil {
+				return err
+			}
+			field.Tags = append(field.Tags, tag)
+		}
+	}
+
+	return nil
+}
+
+func parseTagDefinition(tag *TagDefinition, dict *starlark.Dict) error {
+	var err error
+	if tag.Name, err = getStringField(dict, "name"); err != nil {
+		return err
+	}
+
+	typeVal, found, err := dict.Get(starlark.String("type"))
+	if err != nil {
+		return err
+	}
+	if found {
+		typeStr, ok := typeVal.(starlark.String)
+		if !ok {
+			return errors.New("tag type must be a string")
+		}
+		tag.Type = TagType(typeStr)
+	} else {
+		tag.Type = TagTypeUnspecified
 	}
 
 	return nil

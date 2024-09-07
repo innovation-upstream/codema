@@ -12,12 +12,20 @@ import (
 type (
 	FieldDirective map[string]interface{}
 
+	TagType string
+
+	TagDefinition struct {
+		Name string
+		Type TagType
+	}
+
 	FieldDefinition struct {
-		Name        string                 `yaml:"name"`
-		Type        string                 `yaml:"type"`
-		Description string                 `yaml:"description"`
-		Optional    bool                   `yaml:"optional"`
-		Directives  map[string]interface{} `yaml:"directives"`
+		Name        string
+		Type        string
+		Description string
+		Optional    bool
+		Directives  map[string]interface{}
+		Tags        []TagDefinition
 	}
 
 	EnumDefinition struct {
@@ -49,10 +57,18 @@ type (
 		TargetSnippets map[string]SnippetPaths
 	}
 
+	SecondaryModelType string
+
+	SecondaryModel struct {
+		Model ModelDefinition
+		Type  SecondaryModelType
+	}
+
 	MicroserviceDefinition struct {
-		Label                   string                   `yaml:"label"`
-		Models                  []ModelDefinition        `yaml:"models"`
-		FunctionImplementations []FunctionImplementation `yaml:"function_implementations"`
+		Label                   string
+		PrimaryModel            ModelDefinition
+		SecondaryModels         []SecondaryModel
+		FunctionImplementations []FunctionImplementation
 		LabelKebab              string
 		LabelCamel              string
 		LabelLowerCamel         string
@@ -98,6 +114,18 @@ type (
 	}
 )
 
+const (
+	SecondaryModelTypeUnspecified SecondaryModelType = "UNSPECIFIED"
+	SecondaryModelTypeUtility     SecondaryModelType = "UTILITY"
+	SecondaryModelTypeSearch      SecondaryModelType = "SEARCH"
+)
+
+const (
+	TagTypeOwner       TagType = "OWNER"
+	TagTypeParent      TagType = "PARENT"
+	TagTypeUnspecified TagType = "UNSPECIFIED"
+)
+
 type (
 	ConfigLoader interface {
 		GetConfig() (*Config, error)
@@ -139,15 +167,6 @@ func (l *yamlConfigLoader) GetConfig() (*Config, error) {
 		config.Apis[ax].LabelSnake = apiLabelSnake
 
 		for ix, m := range a.Microservices {
-			for mx, model := range m.Models {
-				for fx, field := range model.Fields {
-					if err := validateFieldType(field.Type, model.Enums); err != nil {
-						return nil, errors.Wrapf(err, "invalid field type for %s.%s", m.Label, field.Name)
-					}
-					config.Apis[ax].Microservices[ix].Models[mx].Fields[fx] = field
-				}
-			}
-
 			l := m.Label
 			labelLowerCamel := strcase.ToLowerCamel(l)
 			labelKebab := strcase.ToKebab(l)
