@@ -44,7 +44,7 @@ func (p *GoImportsPlugin) PreWriteFile(ctx context.Context, filename string, con
 
 	// Run goimports
 	opts := &imports.Options{
-		TabWidth:  8,
+		TabWidth:  4,
 		TabIndent: true,
 		Comments:  true,
 		Fragment:  true,
