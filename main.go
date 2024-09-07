@@ -3,10 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/innovation-upstream/codema/internal/config"
+	"github.com/innovation-upstream/codema/internal/plugin"
+	"github.com/innovation-upstream/codema/internal/plugin/goimports"
 	"github.com/innovation-upstream/codema/internal/target"
 )
 
@@ -80,7 +83,17 @@ func main() {
 		apis[a.Label] = a
 	}
 
-	fmt.Printf("Will render target(s): %s\n", logRenderTargets)
+	pluginRegistry := plugin.NewPluginRegistry()
+
+	for _, t := range cfg.Targets {
+		err := loadPluginsForTarget(pluginRegistry, t)
+		if err != nil {
+			slog.Error("Failed to load plugins for target " + t.Label + " " + err.Error())
+			os.Exit(1)
+		}
+	}
+
+	slog.Info("Will render target(s):", slog.String("targets", logRenderTargets))
 	for _, t := range cfg.Targets {
 		if !isAllTargets {
 			enabledByFlag := targetsToRender.Includes(t.Label)
@@ -90,22 +103,24 @@ func main() {
 
 			renderedTargets = append(renderedTargets, t.Label)
 		}
+
 		ctrl := target.TargetProcessorController{
-			ApiRegistry:  apis,
-			ModulePath:   modulePath,
-			ParentTarget: t,
-			TemplatesDir: templatesDir,
+			ApiRegistry:    apis,
+			ModulePath:     modulePath,
+			ParentTarget:   t,
+			TemplatesDir:   templatesDir,
+			PluginRegistry: pluginRegistry,
 		}
 
 		for _, ta := range t.Apis {
-			err := ctrl.ProcessTargetApi(ta)
+			fileCount, err := ctrl.ProcessTargetApi(ta)
 			if err != nil {
 				fmt.Printf("%+v", err)
 				os.Exit(1)
 			}
-		}
 
-		fmt.Printf("Rendered target: %s\n", t.Label)
+			slog.Info("Rendered target for api", slog.String("target", t.Label), slog.String("api", ta.Label), slog.Int("file_count", fileCount))
+		}
 	}
 
 	if !isAllTargets && len(renderedTargets) != len(targetsToRender) {
@@ -123,4 +138,19 @@ func getTemplateVersion(defaultVersion, version string) string {
 	} else {
 		return version
 	}
+}
+
+func loadPluginsForTarget(registry *plugin.PluginRegistry, t config.Target) error {
+	for _, pluginName := range t.Plugins {
+		var p plugin.Plugin
+		switch pluginName {
+		case "GoImports":
+			p = &goimports.GoImportsPlugin{}
+		// Add cases for other plugins here
+		default:
+			return fmt.Errorf("unknown plugin: %s", pluginName)
+		}
+		registry.Register(t.Label, p)
+	}
+	return nil
 }

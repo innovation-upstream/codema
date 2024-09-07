@@ -87,6 +87,7 @@ type (
 		Apis           []TargetApi `yaml:"apis"`
 		Each           bool        `yaml:"each"`
 		DefaultVersion string      `yaml:"defaultVersion"`
+		Plugins        []string    `yaml:"plugins"`
 	}
 
 	Config struct {

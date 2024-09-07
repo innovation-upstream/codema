@@ -1,9 +1,8 @@
 package target
 
 import (
+	"context"
 	"fmt"
-	"go/format"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,16 +12,18 @@ import (
 	"github.com/iancoleman/strcase"
 	"github.com/innovation-upstream/codema/internal/config"
 	"github.com/innovation-upstream/codema/internal/fs"
+	"github.com/innovation-upstream/codema/internal/plugin"
 	"github.com/innovation-upstream/codema/internal/template"
 	"github.com/pkg/errors"
 )
 
 type (
 	TargetProcessorController struct {
-		ApiRegistry  map[string]config.ApiDefinition
-		ModulePath   string
-		ParentTarget config.Target
-		TemplatesDir string
+		ApiRegistry    map[string]config.ApiDefinition
+		ModulePath     string
+		ParentTarget   config.Target
+		TemplatesDir   string
+		PluginRegistry *plugin.PluginRegistry
 	}
 
 	TargetProcessor struct {
@@ -32,16 +33,16 @@ type (
 	}
 )
 
-func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) error {
+func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) (int, error) {
 	a, ok := ctrl.ApiRegistry[ta.Label]
 	if !ok {
 		msg := fmt.Sprintf("Could not find api: %s", ta.Label)
-		return errors.New(msg)
+		return 0, errors.New(msg)
 	}
 
 	pathTmplStr, err := template.NewPathTemplateString(ta.OutPath)
 	if err != nil {
-		return errors.WithStack(err)
+		return 0, errors.WithStack(err)
 	}
 
 	tp := TargetProcessor{
@@ -50,6 +51,7 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) err
 		TemplatesDir: ctrl.TemplatesDir,
 	}
 
+	var numFiles int
 	if ctrl.ParentTarget.Each {
 	msLoop:
 		for _, m := range a.Microservices {
@@ -65,20 +67,22 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) err
 				Label:        a.Label,
 			})
 			if err != nil {
-				return errors.WithStack(err)
+				return 0, errors.WithStack(err)
 			}
 
 			msOutFilePath := ctrl.ModulePath + msOutFileSubPath
 
 			targetTmplRaw, err := tp.getRawTemplate(ta, ctrl.ParentTarget, msOutFilePath)
 			if err != nil {
-				return errors.WithStack(err)
+				return 0, errors.WithStack(err)
 			}
 
-			err = renderEachFile(msOutFilePath, targetTmplRaw, a, m, ctrl.ParentTarget.Label, ctrl.TemplatesDir)
+			err = ctrl.renderEachFile(msOutFilePath, targetTmplRaw, a, m)
 			if err != nil {
-				return errors.WithStack(err)
+				return 0, errors.WithStack(err)
 			}
+
+			numFiles++
 		}
 	} else {
 		apiOutFileSubPath, err := pathTmplStr.ExecuteApiPathTemplate(template.ApiPathTemplateInput{
@@ -86,23 +90,25 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) err
 			Label: a.Label,
 		})
 		if err != nil {
-			return errors.WithStack(err)
+			return 0, errors.WithStack(err)
 		}
 
 		apiOutFilePath := ctrl.ModulePath + apiOutFileSubPath
 
 		targetTmplRaw, err := tp.getRawTemplate(ta, ctrl.ParentTarget, apiOutFilePath)
 		if err != nil {
-			return errors.WithStack(err)
+			return 0, errors.WithStack(err)
 		}
 
-		err = renderSingleFile(apiOutFilePath, targetTmplRaw, a)
+		err = ctrl.renderSingleFile(apiOutFilePath, targetTmplRaw, a)
 		if err != nil {
-			return errors.WithStack(err)
+			return 0, errors.WithStack(err)
 		}
+
+		numFiles++
 	}
 
-	return nil
+	return numFiles, nil
 }
 
 func getTemplateVersion(defaultVersion, version string) string {
@@ -153,13 +159,15 @@ func (tp *TargetProcessor) getRawTemplate(
 	return string(tmplRaw), nil
 }
 
-func renderEachFile(
+func (ctrl *TargetProcessorController) renderEachFile(
 	path, templateRaw string,
 	api config.ApiDefinition,
 	ms config.MicroserviceDefinition,
-	targetLabel string,
-	templatesDir string,
 ) error {
+	targetLabel := ctrl.ParentTarget.Label
+	templatesDir := ctrl.TemplatesDir
+	pluginReg := ctrl.PluginRegistry
+
 	// Create the directory structure
 	dir := filepath.Dir(path)
 	err := os.MkdirAll(dir, 0755)
@@ -197,19 +205,18 @@ func renderEachFile(
 		return errors.WithStack(err)
 	}
 
-	tmpResult := sb.String()
-	resultToWrite := tmpResult
+	result := strings.TrimSpace(sb.String())
 
-	fmtResult, err := format.Source([]byte(tmpResult))
-	if err == nil {
-		resultToWrite = string(fmtResult)
-	} else {
-		slog.Warn("failed to format as go file", slog.String("path", path), slog.String("error", err.Error()))
+	content := []byte(result)
+	for _, p := range pluginReg.GetPlugins(targetLabel) {
+		var err error
+		content, err = p.PreWriteFile(context.Background(), path, content)
+		if err != nil {
+			return errors.Wrap(err, "plugin execution failed")
+		}
 	}
 
-	result := strings.TrimSpace(resultToWrite)
-
-	_, err = file.WriteString(result)
+	_, err = file.Write(content)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -254,7 +261,10 @@ func injectFunctionImplementationSnippets(
 	return templateRaw, nil
 }
 
-func renderSingleFile(path, templateStr string, api config.ApiDefinition) error {
+func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string, api config.ApiDefinition) error {
+	targetLabel := ctrl.ParentTarget.Label
+	pluginReg := ctrl.PluginRegistry
+
 	// Create the directory structure
 	dir := filepath.Dir(path)
 	err := os.MkdirAll(dir, 0755)
@@ -280,15 +290,18 @@ func renderSingleFile(path, templateStr string, api config.ApiDefinition) error 
 		return errors.WithStack(err)
 	}
 
-	tmpResult := sb.String()
-	fmtResult, err := format.Source([]byte(tmpResult))
-	if err != nil {
-		return errors.WithStack(err)
+	result := strings.TrimSpace(sb.String())
+
+	content := []byte(result)
+	for _, p := range pluginReg.GetPlugins(targetLabel) {
+		var err error
+		content, err = p.PreWriteFile(context.Background(), path, content)
+		if err != nil {
+			return errors.Wrap(err, "plugin execution failed")
+		}
 	}
 
-	result := strings.TrimSpace(string(fmtResult))
-
-	_, err = file.WriteString(result)
+	_, err = file.Write(content)
 	if err != nil {
 		return errors.WithStack(err)
 	}

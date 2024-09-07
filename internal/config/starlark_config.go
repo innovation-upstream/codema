@@ -630,5 +630,25 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 		}
 	}
 
+	pluginsVal, found, err := dict.Get(starlark.String("plugins"))
+	if err != nil {
+		return err
+	}
+	if found {
+		pluginsList, ok := pluginsVal.(*starlark.List)
+		if !ok {
+			return errors.New("plugins must be a list")
+		}
+		target.Plugins = make([]string, pluginsList.Len())
+		for i := 0; i < pluginsList.Len(); i++ {
+			pluginVal := pluginsList.Index(i)
+			pluginStr, ok := pluginVal.(starlark.String)
+			if !ok {
+				return errors.New("each plugin must be a string")
+			}
+			target.Plugins[i] = string(pluginStr)
+		}
+	}
+
 	return nil
 }
