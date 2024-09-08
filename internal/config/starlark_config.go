@@ -349,6 +349,14 @@ func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
 	if model.Name, err = getStringField(dict, "name"); err != nil {
 		return err
 	}
+
+	model.NameKebab = strcase.ToKebab(model.Name)
+	model.NameCamel = strcase.ToCamel(model.Name)
+	model.NameLowerCamel = strcase.ToLowerCamel(model.Name)
+	model.NameScreaming = strcase.ToScreamingSnake(model.Name)
+	model.NameScreamingSnake = model.NameScreaming
+	model.NameSnake = strcase.ToSnake(model.Name)
+
 	if model.Description, err = getStringField(dict, "description"); err != nil {
 		return err
 	}
@@ -441,6 +449,14 @@ func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict, enums []E
 	if field.Name, err = getStringField(dict, "name"); err != nil {
 		return err
 	}
+
+	field.NameKebab = strcase.ToKebab(field.Name)
+	field.NameCamel = strcase.ToCamel(field.Name)
+	field.NameLowerCamel = strcase.ToLowerCamel(field.Name)
+	field.NameScreaming = strcase.ToScreamingSnake(field.Name)
+	field.NameScreamingSnake = field.NameScreaming
+	field.NameSnake = strcase.ToSnake(field.Name)
+
 	if field.Type, err = getStringField(dict, "type"); err != nil {
 		return err
 	}

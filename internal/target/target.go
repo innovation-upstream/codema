@@ -3,6 +3,7 @@ package target
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -390,7 +391,7 @@ func mapGoTypeWithCustomTypePrefix(codemaType string, customTypePrefix string) s
 
 func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) string {
 	// Replace @PM# or @PrimaryModel# followed by a tag name
-	re := regexp.MustCompile(`\{\{(.*)#(\w+).*}}`)
+	re := regexp.MustCompile(`\{\{\W?(@PM.*)#(\w+).*}}`)
 	templateStr = re.ReplaceAllStringFunc(templateStr, func(match string) string {
 		groups := re.FindStringSubmatch(match)
 		before := groups[1]
@@ -403,6 +404,8 @@ func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) st
 				}
 			}
 		}
+
+		slog.Warn("got invalid tag", slog.String("tag", tagName))
 
 		return match // If no matching tag is found, return the original match
 	})

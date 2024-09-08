@@ -20,12 +20,18 @@ type (
 	}
 
 	FieldDefinition struct {
-		Name        string
-		Type        string
-		Description string
-		Optional    bool
-		Directives  map[string]interface{}
-		Tags        []TagDefinition
+		Name               string
+		NameKebab          string
+		NameCamel          string
+		NameLowerCamel     string
+		NameScreaming      string
+		NameScreamingSnake string
+		NameSnake          string
+		Type               string
+		Description        string
+		Optional           bool
+		Directives         map[string]interface{}
+		Tags               []TagDefinition
 	}
 
 	EnumDefinition struct {
@@ -35,10 +41,16 @@ type (
 	}
 
 	ModelDefinition struct {
-		Name        string            `yaml:"name"`
-		Fields      []FieldDefinition `yaml:"fields"`
-		Enums       []EnumDefinition  `yaml:"enums"`
-		Description string            `yaml:"description"`
+		Name               string `yaml:"name"`
+		NameKebab          string
+		NameCamel          string
+		NameLowerCamel     string
+		NameScreaming      string
+		NameScreamingSnake string
+		NameSnake          string
+		Fields             []FieldDefinition `yaml:"fields"`
+		Enums              []EnumDefinition  `yaml:"enums"`
+		Description        string            `yaml:"description"`
 	}
 
 	FunctionDefinition struct {
