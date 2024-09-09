@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/iancoleman/strcase"
@@ -742,7 +744,7 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 
 	pluginsVal, found, err := dict.Get(starlark.String("plugins"))
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	if found {
 		pluginsList, ok := pluginsVal.(*starlark.List)
@@ -760,5 +762,46 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 		}
 	}
 
+	// Parse options
+	optionsVal, found, err := dict.Get(starlark.String("options"))
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	if found {
+		optionsDict, ok := optionsVal.(*starlark.Dict)
+		if !ok {
+			return errors.New("options must be a dictionary")
+		}
+		fileModeVal, found, err := optionsDict.Get(starlark.String("fileMode"))
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		if found {
+			fileModeInt, ok := fileModeVal.(starlark.Int)
+			if !ok {
+				return errors.New("fileMode must be an integer")
+			}
+			fileModeRaw := "0" + fileModeInt.String()
+
+			// Parse the string as a base-8 (octal) integer
+			fileMode, err := strconv.ParseUint(fileModeRaw, 8, 32)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+
+			fmt.Printf("%+v\n", fileMode)
+			target.Options.FileMode = os.FileMode(fileMode)
+			fmt.Printf("%+v\n", target.Options.FileMode)
+		}
+	}
+
+	target.setDefaultOptions()
+
 	return nil
+}
+
+func (t *Target) setDefaultOptions() {
+	if t.Options.FileMode == 0 {
+		t.Options.FileMode = 0644
+	}
 }

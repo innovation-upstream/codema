@@ -108,14 +108,19 @@ type (
 		SkipLabels []string `yaml:"skipLabels"`
 	}
 
+	TargetOptions struct {
+		FileMode os.FileMode `yaml:"fileMode"`
+	}
+
 	Target struct {
-		Label          string      `yaml:"label"`
-		TemplatePath   string      `yaml:"templatePath"`
-		TemplateDir    string      `yaml:"templateDir"`
-		Apis           []TargetApi `yaml:"apis"`
-		Each           bool        `yaml:"each"`
-		DefaultVersion string      `yaml:"defaultVersion"`
-		Plugins        []string    `yaml:"plugins"`
+		Label          string        `yaml:"label"`
+		TemplatePath   string        `yaml:"templatePath"`
+		TemplateDir    string        `yaml:"templateDir"`
+		Apis           []TargetApi   `yaml:"apis"`
+		Each           bool          `yaml:"each"`
+		DefaultVersion string        `yaml:"defaultVersion"`
+		Plugins        []string      `yaml:"plugins"`
+		Options        TargetOptions `yaml:"options"`
 	}
 
 	Config struct {

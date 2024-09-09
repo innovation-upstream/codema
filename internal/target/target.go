@@ -158,7 +158,9 @@ func (tp *TargetProcessor) getRawTemplate(
 		panic(fmt.Sprintf("Error reading file: %+v", err))
 	}
 
-	return string(tmplRaw), nil
+	templateContent := string(tmplRaw)
+
+	return templateContent, nil
 }
 
 func (ctrl *TargetProcessorController) renderEachFile(
@@ -225,7 +227,8 @@ func (ctrl *TargetProcessorController) renderEachFile(
 		return errors.WithStack(err)
 	}
 
-	os.Chmod(path, 0444)
+	fileMode := ctrl.ParentTarget.Options.FileMode
+	os.Chmod(path, fileMode)
 
 	return nil
 }
@@ -271,7 +274,7 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 
 	// Create the directory structure
 	dir := filepath.Dir(path)
-	err := os.MkdirAll(dir, 0755)
+	err := os.MkdirAll(dir, 444)
 	if err != nil {
 		return errors.Wrap(err, "failed to create directory structure")
 	}
@@ -279,7 +282,7 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 	os.Chmod(path, 0666)
 	file, err := os.Create(path)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	defer file.Close()
 
@@ -312,7 +315,8 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 		return errors.WithStack(err)
 	}
 
-	os.Chmod(path, 0444)
+	fileMode := ctrl.ParentTarget.Options.FileMode
+	os.Chmod(path, fileMode)
 
 	return nil
 }
@@ -326,6 +330,7 @@ func templateFuncs() goTmpl.FuncMap {
 		"titleCase":                     strcase.ToCamel,
 		"snakecase":                     strcase.ToSnake,
 		"camelcase":                     strcase.ToLowerCamel,
+		"mapGraphQLType":                mapGraphQLType,
 	}
 }
 
@@ -415,4 +420,21 @@ func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) st
 	templateStr = re.ReplaceAllString(templateStr, ".Microservice.PrimaryModel")
 
 	return templateStr
+}
+
+func mapGraphQLType(codemaType string) string {
+	switch codemaType {
+	case "ID", "String":
+		return "String"
+	case "Int":
+		return "Int"
+	case "Float":
+		return "Float"
+	case "Boolean":
+		return "Boolean"
+	case "DateTime":
+		return "Int"
+	default:
+		return codemaType // For custom types and enums, use as-is
+	}
 }
