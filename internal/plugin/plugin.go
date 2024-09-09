@@ -7,6 +7,7 @@ import (
 type Plugin interface {
 	Name() string
 	PreWriteFile(ctx context.Context, filename string, content []byte) ([]byte, error)
+	PreExecTemplate(ctx context.Context, templateContent []byte) ([]byte, error)
 }
 
 type PluginRegistry struct {

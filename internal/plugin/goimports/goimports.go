@@ -57,3 +57,7 @@ func (p *GoImportsPlugin) PreWriteFile(ctx context.Context, filename string, con
 
 	return processedContent, nil
 }
+
+func (p *GoImportsPlugin) PreExecTemplate(ctx context.Context, templateContent []byte) ([]byte, error) {
+	return templateContent, nil
+}

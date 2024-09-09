@@ -196,6 +196,7 @@ func (ctrl *TargetProcessorController) renderEachFile(
 
 	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateRaw)
 	if err != nil {
+		fmt.Printf("%+v\n", templateRaw)
 		return errors.WithStack(err)
 	}
 
@@ -228,7 +229,11 @@ func (ctrl *TargetProcessorController) renderEachFile(
 	}
 
 	fileMode := ctrl.ParentTarget.Options.FileMode
-	os.Chmod(path, fileMode)
+	if fileMode == 0 {
+		os.Chmod(path, 0444)
+	} else {
+		os.Chmod(path, fileMode)
+	}
 
 	return nil
 }
@@ -274,7 +279,7 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 
 	// Create the directory structure
 	dir := filepath.Dir(path)
-	err := os.MkdirAll(dir, 444)
+	err := os.MkdirAll(dir, 0755)
 	if err != nil {
 		return errors.Wrap(err, "failed to create directory structure")
 	}
@@ -316,7 +321,11 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 	}
 
 	fileMode := ctrl.ParentTarget.Options.FileMode
-	os.Chmod(path, fileMode)
+	if fileMode == 0 {
+		os.Chmod(path, 0444)
+	} else {
+		os.Chmod(path, fileMode)
+	}
 
 	return nil
 }
@@ -396,7 +405,7 @@ func mapGoTypeWithCustomTypePrefix(codemaType string, customTypePrefix string) s
 
 func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) string {
 	// Replace @PM# or @PrimaryModel# followed by a tag name
-	re := regexp.MustCompile(`\{\{\W?(@PM.*)#(\w+).*}}`)
+	re := regexp.MustCompile(`\{\{\W?([^}]*)?#(\w+)[^}]*}}`)
 	templateStr = re.ReplaceAllStringFunc(templateStr, func(match string) string {
 		groups := re.FindStringSubmatch(match)
 		before := groups[1]
@@ -405,7 +414,11 @@ func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) st
 		for _, field := range ms.PrimaryModel.Fields {
 			for _, tag := range field.Tags {
 				if tag.Name == tagName {
-					return "{{ " + before + " }}." + field.Name
+					if before == "" {
+						return field.Name
+					} else {
+						return strings.Replace(match, "#"+tagName, field.Name, -1)
+					}
 				}
 			}
 		}

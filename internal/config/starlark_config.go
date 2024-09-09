@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -789,9 +788,7 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 				return errors.WithStack(err)
 			}
 
-			fmt.Printf("%+v\n", fileMode)
 			target.Options.FileMode = os.FileMode(fileMode)
-			fmt.Printf("%+v\n", target.Options.FileMode)
 		}
 	}
 
@@ -801,7 +798,4 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 }
 
 func (t *Target) setDefaultOptions() {
-	if t.Options.FileMode == 0 {
-		t.Options.FileMode = 0644
-	}
 }
