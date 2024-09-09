@@ -335,10 +335,11 @@ func templateFuncs() goTmpl.FuncMap {
 		"protoType":                     mapToProtoType,
 		"mapGoType":                     mapGoType,
 		"mapGoTypeWithCustomTypePrefix": mapGoTypeWithCustomTypePrefix,
+		"toGoModelFieldCase":            toGoModelFieldCase,
 		"add":                           func(a, b int) int { return a + b },
-		"titleCase":                     strcase.ToCamel,
+		"camelCase":                     strcase.ToCamel,
 		"snakecase":                     strcase.ToSnake,
-		"camelcase":                     strcase.ToLowerCamel,
+		"lowerCamelCase":                strcase.ToLowerCamel,
 		"mapGraphQLType":                mapGraphQLType,
 	}
 }
@@ -450,4 +451,16 @@ func mapGraphQLType(codemaType string) string {
 	default:
 		return codemaType // For custom types and enums, use as-is
 	}
+}
+
+func toGoModelFieldCase(fieldName string) string {
+	// Convert field name to TitleCase
+	titleCaseField := strcase.ToCamel(fieldName)
+
+	// Check if the field name ends with "Id" and change it to "ID"
+	if strings.HasSuffix(titleCaseField, "Id") {
+		titleCaseField = strings.TrimSuffix(titleCaseField, "Id") + "ID"
+	}
+
+	return titleCaseField
 }
