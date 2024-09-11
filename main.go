@@ -74,7 +74,6 @@ func main() {
 		panic(err)
 	}
 
-	modulePath := config.ExpandModulePath(cfg.ModuleDir)
 	templatesDir := config.ExpandTemplatePath(cfg.TemplateDir)
 
 	apis := make(map[string]config.ApiDefinition)
@@ -106,12 +105,12 @@ func main() {
 
 		ctrl := target.TargetProcessorController{
 			ApiRegistry:    apis,
-			ModulePath:     modulePath,
 			ParentTarget:   t,
 			TemplatesDir:   templatesDir,
 			PluginRegistry: pluginRegistry,
 		}
 
+		var targetFileCount int
 		for _, ta := range t.Apis {
 			fileCount, err := ctrl.ProcessTargetApi(ta)
 			if err != nil {
@@ -119,8 +118,11 @@ func main() {
 				os.Exit(1)
 			}
 
+			targetFileCount += fileCount
 			slog.Info("Rendered target for api", slog.String("target", t.Label), slog.String("api", ta.Label), slog.Int("file_count", fileCount))
 		}
+
+		slog.Info("Rendered target", slog.String("target", t.Label), slog.Int("api_count", len(t.Apis)), slog.Int("file_count", targetFileCount))
 	}
 
 	if !isAllTargets && len(renderedTargets) != len(targetsToRender) {

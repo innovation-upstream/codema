@@ -22,7 +22,6 @@ import (
 type (
 	TargetProcessorController struct {
 		ApiRegistry    map[string]config.ApiDefinition
-		ModulePath     string
 		ParentTarget   config.Target
 		TemplatesDir   string
 		PluginRegistry *plugin.PluginRegistry
@@ -72,7 +71,7 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) (in
 				return 0, errors.WithStack(err)
 			}
 
-			msOutFilePath := ctrl.ModulePath + msOutFileSubPath
+			msOutFilePath := config.ExpandModulePath(msOutFileSubPath)
 
 			targetTmplRaw, err := tp.getRawTemplate(ta, ctrl.ParentTarget, msOutFilePath)
 			if err != nil {
@@ -95,7 +94,7 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) (in
 			return 0, errors.WithStack(err)
 		}
 
-		apiOutFilePath := ctrl.ModulePath + apiOutFileSubPath
+		apiOutFilePath := config.ExpandModulePath(apiOutFileSubPath)
 
 		targetTmplRaw, err := tp.getRawTemplate(ta, ctrl.ParentTarget, apiOutFilePath)
 		if err != nil {
@@ -250,18 +249,40 @@ func injectFunctionImplementationSnippets(
 			continue
 		}
 
-		fullSnippetPath := templatesDir + snippetPaths.ContentPath
-		snippetContent, err := os.ReadFile(fullSnippetPath)
-		if err != nil {
-			return "", errors.Wrap(err, fmt.Sprintf("Error reading snippet file: %s", fullSnippetPath))
+		var snippetContent []byte
+		if snippetPaths.ContentPath != "" {
+			fullSnippetPath := templatesDir + snippetPaths.ContentPath
+			var err error
+			snippetContent, err = os.ReadFile(fullSnippetPath)
+			if err != nil {
+				return "", errors.Wrap(err, fmt.Sprintf("Error reading snippet file: %s", fullSnippetPath))
+			}
 		}
 
-		fullImportsPath := templatesDir + snippetPaths.ImportsPath
-		importsContent, err := os.ReadFile(fullImportsPath)
-		if err != nil {
-			// If imports file doesn't exist, continue without it
-			importsContent = []byte("")
+		var importsContent []byte
+		if snippetPaths.ImportsPath != "" {
+			fullImportsPath := templatesDir + snippetPaths.ImportsPath
+			var err error
+			importsContent, err = os.ReadFile(fullImportsPath)
+			if err != nil {
+				// If imports file doesn't exist, continue without it
+				importsContent = []byte("")
+			}
 		}
+
+		// Handle hook property
+		re := regexp.MustCompile(`{{/\* FUNCTION_IMPLEMENTATIONS\s+hook="(\w+)"\s+\*/}}`)
+		templateRaw = re.ReplaceAllStringFunc(templateRaw, func(match string) string {
+			hookName := re.FindStringSubmatch(match)[1]
+			if snippetPaths.HooksDirectory != "" {
+				hookPath := templatesDir + snippetPaths.HooksDirectory + "/" + hookName + ".template"
+				hookContent, err := os.ReadFile(hookPath)
+				if err == nil {
+					return string(hookContent) + match
+				}
+			}
+			return match
+		})
 
 		placeholderTag := "{{/* FUNCTION_IMPLEMENTATIONS */}}"
 		templateRaw = strings.Replace(templateRaw, placeholderTag, string(snippetContent)+placeholderTag, 1)
@@ -338,9 +359,12 @@ func templateFuncs() goTmpl.FuncMap {
 		"toGoModelFieldCase":            toGoModelFieldCase,
 		"add":                           func(a, b int) int { return a + b },
 		"camelCase":                     strcase.ToCamel,
+		"camelCaseCapitalizeID":         camelCaseCapitalizeID,
+		"lowerCamelCaseCapitalizeID":    lowerCamelCaseCapitalizeID,
 		"snakecase":                     strcase.ToSnake,
 		"lowerCamelCase":                strcase.ToLowerCamel,
 		"mapGraphQLType":                mapGraphQLType,
+		"mapTypescriptType":             mapTypescriptType,
 	}
 }
 
@@ -453,6 +477,23 @@ func mapGraphQLType(codemaType string) string {
 	}
 }
 
+func mapTypescriptType(codemaType string) string {
+	switch codemaType {
+	case "ID", "String":
+		return "string"
+	case "Int":
+		return "number"
+	case "Float":
+		return "number"
+	case "Boolean":
+		return "boolean"
+	case "DateTime":
+		return "number"
+	default:
+		return codemaType // For custom types and enums, use as-is
+	}
+}
+
 func toGoModelFieldCase(fieldName string) string {
 	// Convert field name to TitleCase
 	titleCaseField := strcase.ToCamel(fieldName)
@@ -463,4 +504,24 @@ func toGoModelFieldCase(fieldName string) string {
 	}
 
 	return titleCaseField
+}
+
+func camelCaseCapitalizeID(fieldName string) string {
+	camelCaseField := strcase.ToSnake(fieldName)
+
+	if strings.HasSuffix(camelCaseField, "_id") {
+		// Replace the last occurrence of "id" or "Id" with "ID"
+		camelCaseField = strcase.ToCamel(strings.TrimSuffix(camelCaseField, "_id")) + "ID"
+	}
+	return camelCaseField
+}
+
+func lowerCamelCaseCapitalizeID(fieldName string) string {
+	camelCaseField := strcase.ToSnake(fieldName)
+
+	if strings.HasSuffix(camelCaseField, "_id") {
+		// Replace the last occurrence of "id" or "Id" with "ID"
+		camelCaseField = strcase.ToLowerCamel(strings.TrimSuffix(camelCaseField, "_id")) + "ID"
+	}
+	return camelCaseField
 }

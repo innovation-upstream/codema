@@ -86,19 +86,6 @@ func fillConfig(c *Config, val starlark.Value) error {
 		return errors.New("expected a dictionary at the root of the Starlark config")
 	}
 
-	// Parsing moduleDir
-	moduleDirVal, found, err := dict.Get(starlark.String("moduleDir"))
-	if err != nil {
-		return err
-	}
-	if found {
-		moduleDirRaw, ok := moduleDirVal.(starlark.String)
-		if !ok {
-			return errors.New("moduleDir must be a string")
-		}
-		c.ModuleDir = moduleDirRaw.GoString()
-	}
-
 	// Parsing templateDir
 	templateDirVal, found, err := dict.Get(starlark.String("templateDir"))
 	if err != nil {
@@ -608,9 +595,11 @@ func parseFunctionImplementation(funcImpl *FunctionImplementation, dict *starlar
 			key, value := item[0].(starlark.String), item[1].(*starlark.Dict)
 			contentPath, _, _ := value.Get(starlark.String("content_path"))
 			importsPath, _, _ := value.Get(starlark.String("imports_path"))
+			hooksDirectory, _, _ := value.Get(starlark.String("hooks_directory"))
 			funcImpl.TargetSnippets[string(key)] = SnippetPaths{
-				ContentPath: contentPath.(starlark.String).GoString(),
-				ImportsPath: importsPath.(starlark.String).GoString(),
+				ContentPath:    contentPath.(starlark.String).GoString(),
+				ImportsPath:    importsPath.(starlark.String).GoString(),
+				HooksDirectory: hooksDirectory.(starlark.String).GoString(),
 			}
 		}
 	}

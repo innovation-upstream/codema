@@ -60,8 +60,9 @@ type (
 	}
 
 	SnippetPaths struct {
-		ContentPath string
-		ImportsPath string
+		ContentPath    string
+		ImportsPath    string
+		HooksDirectory string
 	}
 
 	FunctionImplementation struct {
@@ -125,7 +126,6 @@ type (
 
 	Config struct {
 		Apis        []ApiDefinition `yaml:"apis"`
-		ModuleDir   string          `yaml:"moduleDir"`
 		TemplateDir string          `yaml:"templateDir"`
 		Targets     []Target        `yaml:"targets"`
 	}
