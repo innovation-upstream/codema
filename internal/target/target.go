@@ -15,6 +15,7 @@ import (
 	"github.com/innovation-upstream/codema/internal/config"
 	"github.com/innovation-upstream/codema/internal/fs"
 	"github.com/innovation-upstream/codema/internal/plugin"
+	"github.com/innovation-upstream/codema/internal/tag"
 	"github.com/innovation-upstream/codema/internal/template"
 	"github.com/pkg/errors"
 )
@@ -25,6 +26,7 @@ type (
 		ParentTarget   config.Target
 		TemplatesDir   string
 		PluginRegistry *plugin.PluginRegistry
+		TagRegistry    tag.TagRegistry
 	}
 
 	TargetProcessor struct {
@@ -191,11 +193,10 @@ func (ctrl *TargetProcessorController) renderEachFile(
 		return errors.WithStack(err)
 	}
 
-	templateRaw = preprocessTemplate(templateRaw, ms)
+	templateRaw = preprocessTemplate(templateRaw, ms, ctrl.TagRegistry)
 
 	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateRaw)
 	if err != nil {
-		fmt.Printf("%+v\n", templateRaw)
 		return errors.WithStack(err)
 	}
 
@@ -312,7 +313,7 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 	}
 	defer file.Close()
 
-	templateStr = preprocessTemplate(templateStr, config.MicroserviceDefinition{})
+	templateStr = preprocessTemplate(templateStr, config.MicroserviceDefinition{}, ctrl.TagRegistry)
 
 	tmpl, err := goTmpl.New(path).Parse(templateStr)
 	if err != nil {
@@ -365,6 +366,8 @@ func templateFuncs() goTmpl.FuncMap {
 		"lowerCamelCase":                strcase.ToLowerCamel,
 		"mapGraphQLType":                mapGraphQLType,
 		"mapTypescriptType":             mapTypescriptType,
+		"fieldHasTag":                   fieldHasTag,
+		"isPrimitiveFieldType":          config.IsPrimitiveFieldType,
 	}
 }
 
@@ -428,7 +431,11 @@ func mapGoTypeWithCustomTypePrefix(codemaType string, customTypePrefix string) s
 	}
 }
 
-func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) string {
+func preprocessTemplate(
+	templateStr string,
+	ms config.MicroserviceDefinition,
+	tagReg tag.TagRegistry,
+) string {
 	// Replace @PM# or @PrimaryModel# followed by a tag name
 	re := regexp.MustCompile(`\{\{\W?([^}]*)?#(\w+)[^}]*}}`)
 	templateStr = re.ReplaceAllStringFunc(templateStr, func(match string) string {
@@ -453,11 +460,33 @@ func preprocessTemplate(templateStr string, ms config.MicroserviceDefinition) st
 		return match // If no matching tag is found, return the original match
 	})
 
+	templateStr = resolveTagReferences(templateStr, tagReg.GetTagByName)
+
 	// Replace @PM or @PrimaryModel with {{ .Microservice.PrimaryModel }}
 	re = regexp.MustCompile(`@PM|@PrimaryModel`)
 	templateStr = re.ReplaceAllString(templateStr, ".Microservice.PrimaryModel")
 
 	return templateStr
+}
+
+func resolveTagReferences(template string, resolveTag func(string) config.TagDefinition) string {
+	re := regexp.MustCompile(`@Tags\.[^\W.]+`)
+	matches := re.FindAllString(template, -1)
+
+	for _, match := range matches {
+		tagName := strings.TrimPrefix(match, "@Tags.")
+		tag := resolveTag(tagName)
+		if tag.Name == "" {
+			msg := fmt.Sprintf("not found: %s", tagName)
+			slog.Warn(msg)
+			template = strings.ReplaceAll(template, match, "\"TAG_NOT_FOUND\"")
+			return template
+		}
+
+		template = strings.ReplaceAll(template, match, "\""+tag.Name+"\"")
+	}
+
+	return template
 }
 
 func mapGraphQLType(codemaType string) string {
@@ -524,4 +553,16 @@ func lowerCamelCaseCapitalizeID(fieldName string) string {
 		camelCaseField = strcase.ToLowerCamel(strings.TrimSuffix(camelCaseField, "_id")) + "ID"
 	}
 	return camelCaseField
+}
+
+func fieldHasTag(field config.FieldDefinition, tagName string) bool {
+	var hasTag bool
+	for _, t := range field.Tags {
+		if t.Name == tagName {
+			hasTag = true
+			break
+		}
+	}
+
+	return hasTag
 }

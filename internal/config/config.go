@@ -220,12 +220,21 @@ func ExpandTemplatePath(templatePathRaw string) string {
 	return templatePath
 }
 
-func validateFieldType(fieldType string, enums []EnumDefinition) error {
+func IsPrimitiveFieldType(fieldType string) bool {
 	validTypes := map[string]bool{
 		"Int": true, "Float": true, "String": true, "Boolean": true, "ID": true, "DateTime": true,
 	}
 
 	if validTypes[fieldType] {
+		return true
+	}
+
+	return false
+}
+
+func validateFieldType(fieldType string, enums []EnumDefinition) error {
+	isPrimitiveType := IsPrimitiveFieldType(fieldType)
+	if isPrimitiveType {
 		return nil
 	}
 
