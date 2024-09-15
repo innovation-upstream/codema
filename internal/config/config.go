@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -251,4 +253,20 @@ func validateFieldType(fieldType string, enums []EnumDefinition) error {
 	}
 
 	return errors.Errorf("invalid field type: %s", fieldType)
+}
+
+func (f FieldDefinition) GetDirectiveStringValue(name string) string {
+	d := f.Directives[name]
+	if d == nil {
+		return ""
+	}
+
+	switch d.(type) {
+	case string:
+		return d.(string)
+	default:
+		slog.Warn("Unsupported directive value type", slog.String("value", fmt.Sprintf("%+v", d)))
+	}
+
+	return ""
 }

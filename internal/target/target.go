@@ -13,6 +13,7 @@ import (
 
 	"github.com/iancoleman/strcase"
 	"github.com/innovation-upstream/codema/internal/config"
+	"github.com/innovation-upstream/codema/internal/directive"
 	"github.com/innovation-upstream/codema/internal/fs"
 	"github.com/innovation-upstream/codema/internal/plugin"
 	"github.com/innovation-upstream/codema/internal/tag"
@@ -197,6 +198,7 @@ func (ctrl *TargetProcessorController) renderEachFile(
 
 	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateRaw)
 	if err != nil {
+		slog.Info(templateRaw)
 		return errors.WithStack(err)
 	}
 
@@ -250,6 +252,20 @@ func injectFunctionImplementationSnippets(
 			continue
 		}
 
+		// Handle hook property
+		re := regexp.MustCompile(`{{/\* FUNCTION_IMPLEMENTATIONS\s+hook="(\w+)"\s+\*/}}`)
+		templateRaw = re.ReplaceAllStringFunc(templateRaw, func(match string) string {
+			hookName := re.FindStringSubmatch(match)[1]
+			if snippetPaths.HooksDirectory != "" {
+				hookPath := templatesDir + snippetPaths.HooksDirectory + "/" + hookName + ".template"
+				hookContent, err := os.ReadFile(hookPath)
+				if err == nil {
+					return string(hookContent) + match
+				}
+			}
+			return match
+		})
+
 		var snippetContent []byte
 		if snippetPaths.ContentPath != "" {
 			fullSnippetPath := templatesDir + snippetPaths.ContentPath
@@ -270,20 +286,6 @@ func injectFunctionImplementationSnippets(
 				importsContent = []byte("")
 			}
 		}
-
-		// Handle hook property
-		re := regexp.MustCompile(`{{/\* FUNCTION_IMPLEMENTATIONS\s+hook="(\w+)"\s+\*/}}`)
-		templateRaw = re.ReplaceAllStringFunc(templateRaw, func(match string) string {
-			hookName := re.FindStringSubmatch(match)[1]
-			if snippetPaths.HooksDirectory != "" {
-				hookPath := templatesDir + snippetPaths.HooksDirectory + "/" + hookName + ".template"
-				hookContent, err := os.ReadFile(hookPath)
-				if err == nil {
-					return string(hookContent) + match
-				}
-			}
-			return match
-		})
 
 		placeholderTag := "{{/* FUNCTION_IMPLEMENTATIONS */}}"
 		templateRaw = strings.Replace(templateRaw, placeholderTag, string(snippetContent)+placeholderTag, 1)
@@ -315,7 +317,7 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 
 	templateStr = preprocessTemplate(templateStr, config.MicroserviceDefinition{}, ctrl.TagRegistry)
 
-	tmpl, err := goTmpl.New(path).Parse(templateStr)
+	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateStr)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -362,9 +364,13 @@ func templateFuncs() goTmpl.FuncMap {
 		"camelCase":                     strcase.ToCamel,
 		"camelCaseCapitalizeID":         camelCaseCapitalizeID,
 		"lowerCamelCaseCapitalizeID":    lowerCamelCaseCapitalizeID,
+		"lowerCamelCaseNoExceptions":    lowerCamelCaseNoExceptions,
+		"camelCaseNoExceptions":         camelCaseNoExceptions,
 		"snakecase":                     strcase.ToSnake,
 		"lowerCamelCase":                strcase.ToLowerCamel,
 		"mapGraphQLType":                mapGraphQLType,
+		"getGraphqlTypeForField":        getGraphqlTypeForField,
+		"getGraphqlNameForField":        getGraphqlNameForField,
 		"mapTypescriptType":             mapTypescriptType,
 		"fieldHasTag":                   fieldHasTag,
 		"isPrimitiveFieldType":          config.IsPrimitiveFieldType,
@@ -436,7 +442,7 @@ func preprocessTemplate(
 	ms config.MicroserviceDefinition,
 	tagReg tag.TagRegistry,
 ) string {
-	// Replace @PM# or @PrimaryModel# followed by a tag name
+	// Replace @PM# or @PrimaryModel# or # followed by a tag name
 	re := regexp.MustCompile(`\{\{\W?([^}]*)?#(\w+)[^}]*}}`)
 	templateStr = re.ReplaceAllStringFunc(templateStr, func(match string) string {
 		groups := re.FindStringSubmatch(match)
@@ -444,8 +450,8 @@ func preprocessTemplate(
 		tagName := groups[2]
 
 		for _, field := range ms.PrimaryModel.Fields {
-			for _, tag := range field.Tags {
-				if tag.Name == tagName {
+			for _, fieldTag := range field.Tags {
+				if fieldTag.Name == tagName {
 					if before == "" {
 						return field.Name
 					} else {
@@ -455,7 +461,7 @@ func preprocessTemplate(
 			}
 		}
 
-		slog.Warn("got invalid tag", slog.String("tag", tagName))
+		slog.Warn("got no field for tag", slog.String("tag", tagName), slog.String("model", ms.PrimaryModel.Name))
 
 		return match // If no matching tag is found, return the original match
 	})
@@ -489,8 +495,8 @@ func resolveTagReferences(template string, resolveTag func(string) config.TagDef
 	return template
 }
 
-func mapGraphQLType(codemaType string) string {
-	switch codemaType {
+func mapGraphQLType(t string) string {
+	switch t {
 	case "ID", "String":
 		return "String"
 	case "Int":
@@ -502,8 +508,26 @@ func mapGraphQLType(codemaType string) string {
 	case "DateTime":
 		return "Int"
 	default:
-		return codemaType // For custom types and enums, use as-is
+		return t
 	}
+}
+
+func getGraphqlTypeForField(f config.FieldDefinition) string {
+	mask := f.GetDirectiveStringValue(directive.WellKnownDirectiveGraphQLTypeNameMask)
+	if mask != "" {
+		return mask
+	}
+
+	return mapGraphQLType(f.Type)
+}
+
+func getGraphqlNameForField(f config.FieldDefinition) string {
+	mask := f.GetDirectiveStringValue(directive.WellKnownDirectiveGraphQLFieldNameMask)
+	if mask != "" {
+		return mask
+	}
+
+	return strcase.ToLowerCamel(f.Name)
 }
 
 func mapTypescriptType(codemaType string) string {
@@ -551,6 +575,24 @@ func lowerCamelCaseCapitalizeID(fieldName string) string {
 	if strings.HasSuffix(camelCaseField, "_id") {
 		// Replace the last occurrence of "id" or "Id" with "ID"
 		camelCaseField = strcase.ToLowerCamel(strings.TrimSuffix(camelCaseField, "_id")) + "ID"
+	}
+	return camelCaseField
+}
+
+func lowerCamelCaseNoExceptions(fieldName string) string {
+	camelCaseField := strcase.ToSnake(fieldName)
+
+	if strings.HasSuffix(camelCaseField, "_id") {
+		camelCaseField = strcase.ToLowerCamel(strings.TrimSuffix(camelCaseField, "_id")) + "Id"
+	}
+	return camelCaseField
+}
+
+func camelCaseNoExceptions(fieldName string) string {
+	camelCaseField := strcase.ToSnake(fieldName)
+
+	if strings.HasSuffix(camelCaseField, "_id") {
+		camelCaseField = strcase.ToCamel(strings.TrimSuffix(camelCaseField, "_id")) + "Id"
 	}
 	return camelCaseField
 }

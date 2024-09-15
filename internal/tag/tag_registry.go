@@ -16,9 +16,14 @@ type tagRegistry struct {
 	tags map[string]config.TagDefinition
 }
 
-func NewTagRegistery() TagRegistry {
+func NewTagRegistery(initialTags map[string]config.TagDefinition) TagRegistry {
+	defaultTags := initialTags
+	if defaultTags == nil {
+		defaultTags = make(map[string]config.TagDefinition)
+	}
+
 	return &tagRegistry{
-		tags: make(map[string]config.TagDefinition),
+		tags: defaultTags,
 	}
 }
 
@@ -32,6 +37,7 @@ func (r *tagRegistry) RegisterTag(tag config.TagDefinition) error {
 	}
 
 	r.tags[tag.Name] = tag
+	fmt.Printf("Registered Tag: %s\n", tag.Name)
 
 	return nil
 }

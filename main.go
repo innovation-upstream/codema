@@ -78,7 +78,8 @@ func main() {
 	templatesDir := config.ExpandTemplatePath(cfg.TemplateDir)
 
 	apis := make(map[string]config.ApiDefinition)
-	tagReg := tag.NewTagRegistery()
+
+	tagReg := tag.NewTagRegistery(nil)
 
 	for _, a := range cfg.Apis {
 		apis[a.Label] = a
@@ -111,6 +112,7 @@ func main() {
 	}
 
 	slog.Info("Will render target(s):", slog.String("targets", logRenderTargets))
+	var totalFileCount int
 	for _, t := range cfg.Targets {
 		if !isAllTargets {
 			enabledByFlag := targetsToRender.Includes(t.Label)
@@ -138,6 +140,7 @@ func main() {
 			}
 
 			targetFileCount += fileCount
+			totalFileCount += fileCount
 			slog.Info("Rendered target for api", slog.String("target", t.Label), slog.String("api", ta.Label), slog.Int("file_count", fileCount))
 		}
 
@@ -151,6 +154,9 @@ func main() {
 			}
 		}
 	}
+
+	slog.Info("Rendered files", slog.Int("file_count", totalFileCount))
+
 }
 
 func getTemplateVersion(defaultVersion, version string) string {
