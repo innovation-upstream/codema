@@ -258,3 +258,19 @@ func (f ModelDefinition) GetDirectiveStringValue(name string) string {
 
 	return ""
 }
+
+func (f ModelDefinition) GetDirectiveListValue(name string) []interface{} {
+	d := f.Directives[name]
+	if d == nil {
+		return nil
+	}
+
+	switch d.(type) {
+	case []interface{}:
+		return d.([]interface{})
+	default:
+		slog.Warn("Unsupported directive value type", slog.String("value", fmt.Sprintf("%+v", d)))
+	}
+
+	return nil
+}

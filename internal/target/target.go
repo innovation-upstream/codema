@@ -375,6 +375,7 @@ func templateFuncs() goTmpl.FuncMap {
 		"fieldHasTag":                   fieldHasTag,
 		"isPrimitiveFieldType":          config.IsPrimitiveFieldType,
 		"getModelDirective":             getModelDirective,
+		"getModelDirectiveList":         getModelDirectiveList,
 	}
 }
 
@@ -617,4 +618,13 @@ func getModelDirective(f config.ModelDefinition, s string, defaultVal string) st
 	}
 
 	return defaultVal
+}
+
+func getModelDirectiveList(f config.ModelDefinition, s string) []interface{} {
+	arrVal := f.GetDirectiveListValue(s)
+	if arrVal != nil && len(arrVal) > 0 {
+		return arrVal
+	}
+
+	return make([]interface{}, 0)
 }
