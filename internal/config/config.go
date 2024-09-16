@@ -53,6 +53,7 @@ type (
 		Fields             []FieldDefinition `yaml:"fields"`
 		Enums              []EnumDefinition  `yaml:"enums"`
 		Description        string            `yaml:"description"`
+		Directives         map[string]interface{}
 	}
 
 	FunctionDefinition struct {
@@ -231,6 +232,11 @@ func IsPrimitiveFieldType(fieldType string) bool {
 		return true
 	}
 
+	if strings.HasPrefix(fieldType, "[") && strings.HasSuffix(fieldType, "]") {
+		innerType := fieldType[1 : len(fieldType)-1]
+		return IsPrimitiveFieldType(innerType)
+	}
+
 	return false
 }
 
@@ -256,6 +262,22 @@ func validateFieldType(fieldType string, enums []EnumDefinition) error {
 }
 
 func (f FieldDefinition) GetDirectiveStringValue(name string) string {
+	d := f.Directives[name]
+	if d == nil {
+		return ""
+	}
+
+	switch d.(type) {
+	case string:
+		return d.(string)
+	default:
+		slog.Warn("Unsupported directive value type", slog.String("value", fmt.Sprintf("%+v", d)))
+	}
+
+	return ""
+}
+
+func (f ModelDefinition) GetDirectiveStringValue(name string) string {
 	d := f.Directives[name]
 	if d == nil {
 		return ""

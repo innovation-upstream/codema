@@ -397,6 +397,23 @@ func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
 		}
 	}
 
+	// Parse directives
+	directivesVal, found, err := dict.Get(starlark.String("directives"))
+	if err != nil {
+		return err
+	}
+	if found {
+		directivesDict, ok := directivesVal.(*starlark.Dict)
+		if !ok {
+			return errors.New("directives must be a dictionary")
+		}
+		model.Directives = make(map[string]interface{})
+		for _, item := range directivesDict.Items() {
+			key, value := item[0].(starlark.String), item[1]
+			model.Directives[string(key)] = starlarkValueToGo(value)
+		}
+	}
+
 	return nil
 }
 

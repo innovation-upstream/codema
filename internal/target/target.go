@@ -374,6 +374,7 @@ func templateFuncs() goTmpl.FuncMap {
 		"mapTypescriptType":             mapTypescriptType,
 		"fieldHasTag":                   fieldHasTag,
 		"isPrimitiveFieldType":          config.IsPrimitiveFieldType,
+		"getModelDirective":             getModelDirective,
 	}
 }
 
@@ -607,4 +608,13 @@ func fieldHasTag(field config.FieldDefinition, tagName string) bool {
 	}
 
 	return hasTag
+}
+
+func getModelDirective(f config.ModelDefinition, s string, defaultVal string) string {
+	val := f.GetDirectiveStringValue(s)
+	if val != "" {
+		return val
+	}
+
+	return defaultVal
 }
