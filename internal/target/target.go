@@ -15,6 +15,7 @@ import (
 	"github.com/innovation-upstream/codema/internal/config"
 	"github.com/innovation-upstream/codema/internal/directive"
 	"github.com/innovation-upstream/codema/internal/fs"
+	"github.com/innovation-upstream/codema/internal/model"
 	"github.com/innovation-upstream/codema/internal/plugin"
 	"github.com/innovation-upstream/codema/internal/tag"
 	"github.com/innovation-upstream/codema/internal/template"
@@ -28,6 +29,7 @@ type (
 		TemplatesDir   string
 		PluginRegistry *plugin.PluginRegistry
 		TagRegistry    tag.TagRegistry
+		ModelRegistry  model.ModelRegistry
 	}
 
 	TargetProcessor struct {

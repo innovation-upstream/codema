@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/innovation-upstream/codema/internal/config"
+	"github.com/innovation-upstream/codema/internal/model"
 	"github.com/innovation-upstream/codema/internal/plugin"
 	"github.com/innovation-upstream/codema/internal/plugin/goimports"
 	"github.com/innovation-upstream/codema/internal/tag"
@@ -80,11 +81,14 @@ func main() {
 	apis := make(map[string]config.ApiDefinition)
 
 	tagReg := tag.NewTagRegistery(nil)
+	modelReg := model.NewModelRegistery(nil)
 
 	for _, a := range cfg.Apis {
 		apis[a.Label] = a
 
 		for _, ms := range a.Microservices {
+			modelReg.RegisterModel(ms.PrimaryModel)
+
 			for _, field := range ms.PrimaryModel.Fields {
 				for _, tag := range field.Tags {
 					tagReg.RegisterTag(tag)
@@ -92,7 +96,9 @@ func main() {
 			}
 
 			for _, model := range ms.SecondaryModels {
-				for _, field := range model.Model.Fields {
+				modelReg.RegisterModel(model)
+
+				for _, field := range model.Fields {
 					for _, tag := range field.Tags {
 						tagReg.RegisterTag(tag)
 					}
@@ -129,6 +135,7 @@ func main() {
 			TemplatesDir:   templatesDir,
 			PluginRegistry: pluginRegistry,
 			TagRegistry:    tagReg,
+			ModelRegistry:  modelReg,
 		}
 
 		var targetFileCount int
