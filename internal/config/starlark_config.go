@@ -224,21 +224,6 @@ func parseMicroserviceDefinition(micro *MicroserviceDefinition, dict *starlark.D
 		return err
 	}
 
-	// Parse primary model
-	primaryModelVal, found, err := dict.Get(starlark.String("primary_model"))
-	if err != nil {
-		return err
-	}
-	if found {
-		primaryModelDict, ok := primaryModelVal.(*starlark.Dict)
-		if !ok {
-			return errors.New("primary_model must be a dictionary")
-		}
-		if err := parseModelDefinition(&micro.PrimaryModel, primaryModelDict); err != nil {
-			return err
-		}
-	}
-
 	// Parse secondary models
 	secondaryModelsVal, found, err := dict.Get(starlark.String("secondary_models"))
 	if err != nil {
@@ -255,11 +240,26 @@ func parseMicroserviceDefinition(micro *MicroserviceDefinition, dict *starlark.D
 			if !ok {
 				return errors.New("each secondary model must be a dictionary")
 			}
-			var secondaryModel SecondaryModel
-			if err := parseSecondaryModel(&secondaryModel, secondaryModelDict); err != nil {
+			var secondaryModel ModelDefinition
+			if err := parseModelDefinition(&secondaryModel, secondaryModelDict, nil); err != nil {
 				return err
 			}
 			micro.SecondaryModels = append(micro.SecondaryModels, secondaryModel)
+		}
+	}
+
+	// Parse primary model
+	primaryModelVal, found, err := dict.Get(starlark.String("primary_model"))
+	if err != nil {
+		return err
+	}
+	if found {
+		primaryModelDict, ok := primaryModelVal.(*starlark.Dict)
+		if !ok {
+			return errors.New("primary_model must be a dictionary")
+		}
+		if err := parseModelDefinition(&micro.PrimaryModel, primaryModelDict, micro.SecondaryModels); err != nil {
+			return err
 		}
 	}
 
@@ -299,40 +299,11 @@ func parseMicroserviceDefinition(micro *MicroserviceDefinition, dict *starlark.D
 	return nil
 }
 
-func parseSecondaryModel(secondaryModel *SecondaryModel, dict *starlark.Dict) error {
-	modelVal, found, err := dict.Get(starlark.String("model"))
-	if err != nil {
-		return err
-	}
-	if !found {
-		return errors.New("model is required in secondary model")
-	}
-	modelDict, ok := modelVal.(*starlark.Dict)
-	if !ok {
-		return errors.New("model must be a dictionary")
-	}
-	if err := parseModelDefinition(&secondaryModel.Model, modelDict); err != nil {
-		return err
-	}
-
-	typeVal, found, err := dict.Get(starlark.String("type"))
-	if err != nil {
-		return err
-	}
-	if found {
-		typeStr, ok := typeVal.(starlark.String)
-		if !ok {
-			return errors.New("type must be a string")
-		}
-		secondaryModel.Type = SecondaryModelType(typeStr)
-	} else {
-		secondaryModel.Type = SecondaryModelTypeUnspecified
-	}
-
-	return nil
-}
-
-func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
+func parseModelDefinition(
+	model *ModelDefinition,
+	dict *starlark.Dict,
+	registeredSecondaryModels []ModelDefinition,
+) error {
 	var err error
 	if model.Name, err = getStringField(dict, "name"); err != nil {
 		return err
@@ -390,7 +361,7 @@ func parseModelDefinition(model *ModelDefinition, dict *starlark.Dict) error {
 				return errors.New("each field must be a dictionary")
 			}
 			var field FieldDefinition
-			if err := parseFieldDefinition(&field, fieldDict, model.Enums); err != nil {
+			if err := parseFieldDefinition(&field, fieldDict, model.Enums, registeredSecondaryModels); err != nil {
 				return err
 			}
 			model.Fields = append(model.Fields, field)
@@ -449,7 +420,12 @@ func parseEnumDefinition(enum *EnumDefinition, dict *starlark.Dict) error {
 	return nil
 }
 
-func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict, enums []EnumDefinition) error {
+func parseFieldDefinition(
+	field *FieldDefinition,
+	dict *starlark.Dict,
+	enums []EnumDefinition,
+	registeredSecondaryModels []ModelDefinition,
+) error {
 	var err error
 	if field.Name, err = getStringField(dict, "name"); err != nil {
 		return err
@@ -465,7 +441,7 @@ func parseFieldDefinition(field *FieldDefinition, dict *starlark.Dict, enums []E
 	if field.Type, err = getStringField(dict, "type"); err != nil {
 		return err
 	}
-	if err := validateFieldType(field.Type, enums); err != nil {
+	if err := validateFieldType(field.Type, enums, registeredSecondaryModels); err != nil {
 		return errors.Wrapf(err, "invalid field type for %s", field.Name)
 	}
 	if field.Description, err = getStringField(dict, "description"); err != nil {
@@ -804,4 +780,36 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 }
 
 func (t *Target) setDefaultOptions() {
+}
+
+func validateFieldType(
+	fieldType string,
+	enums []EnumDefinition,
+	registeredSecondaryModels []ModelDefinition,
+) error {
+	isPrimitiveType := IsPrimitiveFieldType(fieldType)
+	if isPrimitiveType {
+		return nil
+	}
+
+	if strings.HasPrefix(fieldType, "[") && strings.HasSuffix(fieldType, "]") {
+		innerType := fieldType[1 : len(fieldType)-1]
+		return validateFieldType(innerType, enums, registeredSecondaryModels)
+	}
+
+	// Check if the type is a defined enum
+	for _, enum := range enums {
+		if enum.Name == fieldType {
+			return nil
+		}
+	}
+
+	// Check if the type is a defined model
+	for _, model := range registeredSecondaryModels {
+		if model.Name == fieldType {
+			return nil
+		}
+	}
+
+	return errors.Errorf("invalid field type: %s", fieldType)
 }

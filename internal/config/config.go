@@ -73,17 +73,10 @@ type (
 		TargetSnippets map[string]SnippetPaths
 	}
 
-	SecondaryModelType string
-
-	SecondaryModel struct {
-		Model ModelDefinition
-		Type  SecondaryModelType
-	}
-
 	MicroserviceDefinition struct {
 		Label                   string
 		PrimaryModel            ModelDefinition
-		SecondaryModels         []SecondaryModel
+		SecondaryModels         []ModelDefinition
 		FunctionImplementations []FunctionImplementation
 		LabelKebab              string
 		LabelCamel              string
@@ -132,12 +125,6 @@ type (
 		TemplateDir string          `yaml:"templateDir"`
 		Targets     []Target        `yaml:"targets"`
 	}
-)
-
-const (
-	SecondaryModelTypeUnspecified SecondaryModelType = "UNSPECIFIED"
-	SecondaryModelTypeUtility     SecondaryModelType = "UTILITY"
-	SecondaryModelTypeSearch      SecondaryModelType = "SEARCH"
 )
 
 const (
@@ -238,27 +225,6 @@ func IsPrimitiveFieldType(fieldType string) bool {
 	}
 
 	return false
-}
-
-func validateFieldType(fieldType string, enums []EnumDefinition) error {
-	isPrimitiveType := IsPrimitiveFieldType(fieldType)
-	if isPrimitiveType {
-		return nil
-	}
-
-	if strings.HasPrefix(fieldType, "[") && strings.HasSuffix(fieldType, "]") {
-		innerType := fieldType[1 : len(fieldType)-1]
-		return validateFieldType(innerType, enums)
-	}
-
-	// Check if the type is a defined enum
-	for _, enum := range enums {
-		if enum.Name == fieldType {
-			return nil
-		}
-	}
-
-	return errors.Errorf("invalid field type: %s", fieldType)
 }
 
 func (f FieldDefinition) GetDirectiveStringValue(name string) string {
