@@ -241,7 +241,7 @@ func parseMicroserviceDefinition(micro *MicroserviceDefinition, dict *starlark.D
 				return errors.New("each secondary model must be a dictionary")
 			}
 			var secondaryModel ModelDefinition
-			if err := parseModelDefinition(&secondaryModel, secondaryModelDict, nil); err != nil {
+			if err := parseModelDefinition(&secondaryModel, secondaryModelDict, micro.SecondaryModels); err != nil {
 				return err
 			}
 			micro.SecondaryModels = append(micro.SecondaryModels, secondaryModel)
