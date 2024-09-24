@@ -371,6 +371,7 @@ func templateFuncs() goTmpl.FuncMap {
 		"snakecase":                     strcase.ToSnake,
 		"lowerCamelCase":                strcase.ToLowerCamel,
 		"mapGraphQLType":                mapGraphQLType,
+		"mapGraphQLInputType":           mapGraphQLInputType,
 		"getGraphqlTypeForField":        getGraphqlTypeForField,
 		"getGraphqlNameForField":        getGraphqlNameForField,
 		"mapTypescriptType":             mapTypescriptType,
@@ -378,6 +379,7 @@ func templateFuncs() goTmpl.FuncMap {
 		"isPrimitiveFieldType":          config.IsPrimitiveFieldType,
 		"getModelDirective":             getModelDirective,
 		"getModelDirectiveList":         getModelDirectiveList,
+		"getFieldDirective":             getFieldDirective,
 	}
 }
 
@@ -512,7 +514,30 @@ func mapGraphQLType(t string) string {
 	case "DateTime":
 		return "Int"
 	default:
+		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
+			return "[" + mapGraphQLType(t[1:len(t)-1]) + "]"
+		}
 		return t
+	}
+}
+
+func mapGraphQLInputType(t string) string {
+	switch t {
+	case "ID", "String":
+		return "String"
+	case "Int":
+		return "Int"
+	case "Float":
+		return "Float"
+	case "Boolean":
+		return "Boolean"
+	case "DateTime":
+		return "Int"
+	default:
+		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
+			return "[" + mapGraphQLInputType(t[1:len(t)-1]) + "]"
+		}
+		return t + "Input"
 	}
 }
 
@@ -629,4 +654,13 @@ func getModelDirectiveList(f config.ModelDefinition, s string) []interface{} {
 	}
 
 	return make([]interface{}, 0)
+}
+
+func getFieldDirective(f config.FieldDefinition, s string, defaultVal string) string {
+	val := f.GetDirectiveStringValue(s)
+	if val != "" {
+		return val
+	}
+
+	return defaultVal
 }
