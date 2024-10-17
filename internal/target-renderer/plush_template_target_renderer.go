@@ -1,8 +1,6 @@
 package targetrenderer
 
 import (
-	"fmt"
-
 	"github.com/gobuffalo/plush"
 	"github.com/pkg/errors"
 )
@@ -17,7 +15,6 @@ func (r *PlushTemplateTargetRenderer) Render(templateContent string, data interf
 		ctx.Set(name, fn)
 	}
 
-	fmt.Printf("templateContent: %+v\n", templateContent)
 	result, err := plush.Render(templateContent, ctx)
 	if err != nil {
 		return "", errors.WithStack(err)
