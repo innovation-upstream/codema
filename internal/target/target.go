@@ -255,7 +255,7 @@ func injectFunctionImplementationSnippets(
 		}
 
 		// Handle hook property
-		re := regexp.MustCompile(`({{)?/\* FUNCTION_IMPLEMENTATIONS\s+hook="(\w+)"\s+\*/(}})?`)
+		re := regexp.MustCompile(`(?:{{)?/\* FUNCTION_IMPLEMENTATIONS\s+hook="((?:\w|\.)+)"\s+\*/(?:}})?`)
 		templateRaw = re.ReplaceAllStringFunc(templateRaw, func(match string) string {
 			hookName := re.FindStringSubmatch(match)[1]
 			if snippetPaths.HooksDirectory != "" {
