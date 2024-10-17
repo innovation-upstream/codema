@@ -659,6 +659,12 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 	if target.DefaultVersion, err = getStringField(dict, "defaultVersion"); err != nil {
 		return err
 	}
+	if target.DefaultVersionPath, err = getStringField(dict, "defaultVersionPath"); err != nil {
+		return err
+	}
+	if target.DefaultVersionPath == "" {
+		target.DefaultVersionPath = target.DefaultVersion
+	}
 	eachVal, found, err := dict.Get(starlark.String("each"))
 	if err != nil {
 		return err
@@ -696,6 +702,12 @@ func parseTarget(target *Target, dict *starlark.Dict) error {
 			}
 			if api.Version, err = getStringField(apiDict, "version"); err != nil {
 				return err
+			}
+			if api.VersionPath, err = getStringField(apiDict, "versionPath"); err != nil {
+				return err
+			}
+			if api.VersionPath == "" {
+				api.VersionPath = api.Version
 			}
 			// Handle skipLabels and args for each API
 			skipLabelsVal, found, err := apiDict.Get(starlark.String("skipLabels"))

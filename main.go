@@ -140,6 +140,7 @@ func main() {
 
 		var targetFileCount int
 		for _, ta := range t.Apis {
+			slog.Info("Rendering target for api", slog.String("target", t.Label), slog.String("api", ta.Label))
 			fileCount, err := ctrl.ProcessTargetApi(ta)
 			if err != nil {
 				fmt.Printf("%+v", err)

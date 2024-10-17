@@ -20,6 +20,6 @@ func GetLegacyTemplatePath(basePath, templatePath string) string {
 }
 
 func GetTemplatePath(basePath, templateDir, templateVersion string) string {
-	tmplPath := basePath + templateDir + "/" + templateVersion + ".template"
+	tmplPath := basePath + templateDir + "/" + templateVersion
 	return tmplPath
 }

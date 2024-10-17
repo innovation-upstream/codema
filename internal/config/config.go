@@ -99,10 +99,12 @@ type (
 	}
 
 	TargetApi struct {
-		Label      string   `yaml:"label"`
-		OutPath    string   `yaml:"outPath"`
-		Version    string   `yaml:"version"`
-		SkipLabels []string `yaml:"skipLabels"`
+		Label   string `yaml:"label"`
+		OutPath string `yaml:"outPath"`
+		// Deprecated. Use VersionPath
+		Version     string `yaml:"version"`
+		VersionPath string
+		SkipLabels  []string `yaml:"skipLabels"`
 	}
 
 	TargetOptions struct {
@@ -110,14 +112,16 @@ type (
 	}
 
 	Target struct {
-		Label          string        `yaml:"label"`
-		TemplatePath   string        `yaml:"templatePath"`
-		TemplateDir    string        `yaml:"templateDir"`
-		Apis           []TargetApi   `yaml:"apis"`
-		Each           bool          `yaml:"each"`
-		DefaultVersion string        `yaml:"defaultVersion"`
-		Plugins        []string      `yaml:"plugins"`
-		Options        TargetOptions `yaml:"options"`
+		Label        string      `yaml:"label"`
+		TemplatePath string      `yaml:"templatePath"`
+		TemplateDir  string      `yaml:"templateDir"`
+		Apis         []TargetApi `yaml:"apis"`
+		Each         bool        `yaml:"each"`
+		// Deprecated. Use DefaultVersionPath
+		DefaultVersion     string `yaml:"defaultVersion"`
+		DefaultVersionPath string
+		Plugins            []string      `yaml:"plugins"`
+		Options            TargetOptions `yaml:"options"`
 	}
 
 	Config struct {

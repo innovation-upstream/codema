@@ -9,15 +9,12 @@ import (
 	"regexp"
 	"strings"
 
-	goTmpl "text/template"
-
-	"github.com/iancoleman/strcase"
 	"github.com/innovation-upstream/codema/internal/config"
-	"github.com/innovation-upstream/codema/internal/directive"
 	"github.com/innovation-upstream/codema/internal/fs"
 	"github.com/innovation-upstream/codema/internal/model"
 	"github.com/innovation-upstream/codema/internal/plugin"
 	"github.com/innovation-upstream/codema/internal/tag"
+	targetrenderer "github.com/innovation-upstream/codema/internal/target-renderer"
 	"github.com/innovation-upstream/codema/internal/template"
 	"github.com/pkg/errors"
 )
@@ -57,6 +54,24 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) (in
 		TemplatesDir: ctrl.TemplatesDir,
 	}
 
+	targetTmplRaw, tmplPath, err := tp.getRawTemplate(ta)
+	if err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	var renderer targetrenderer.TargetRenderer
+	switch true {
+	case strings.HasSuffix(tmplPath, ".plush"):
+		renderer = &targetrenderer.PlushTemplateTargetRenderer{}
+		break
+	case strings.HasSuffix(tmplPath, ".template") || strings.HasSuffix(tmplPath, ".gotemplate"):
+		renderer = &targetrenderer.GoTemplateTargetRenderer{}
+		break
+	default:
+		renderer = &targetrenderer.GoTemplateTargetRenderer{}
+		break
+	}
+
 	var numFiles int
 	if ctrl.ParentTarget.Each {
 	msLoop:
@@ -78,12 +93,7 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) (in
 
 			msOutFilePath := config.ExpandModulePath(msOutFileSubPath)
 
-			targetTmplRaw, err := tp.getRawTemplate(ta, ctrl.ParentTarget, msOutFilePath)
-			if err != nil {
-				return 0, errors.WithStack(err)
-			}
-
-			err = ctrl.renderEachFile(msOutFilePath, targetTmplRaw, a, m)
+			err = ctrl.renderEachFile(msOutFilePath, targetTmplRaw, a, m, renderer)
 			if err != nil {
 				return 0, errors.WithStack(err)
 			}
@@ -101,12 +111,7 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) (in
 
 		apiOutFilePath := config.ExpandModulePath(apiOutFileSubPath)
 
-		targetTmplRaw, err := tp.getRawTemplate(ta, ctrl.ParentTarget, apiOutFilePath)
-		if err != nil {
-			return 0, errors.WithStack(err)
-		}
-
-		err = ctrl.renderSingleFile(apiOutFilePath, targetTmplRaw, a)
+		err = ctrl.renderSingleFile(apiOutFilePath, targetTmplRaw, a, renderer)
 		if err != nil {
 			return 0, errors.WithStack(err)
 		}
@@ -117,7 +122,7 @@ func (ctrl *TargetProcessorController) ProcessTargetApi(ta config.TargetApi) (in
 	return numFiles, nil
 }
 
-func getTemplateVersion(defaultVersion, version string) string {
+func getTemplateVersionPath(defaultVersion, version string) string {
 	if version == "" {
 		return defaultVersion
 	} else {
@@ -127,15 +132,13 @@ func getTemplateVersion(defaultVersion, version string) string {
 
 func (tp *TargetProcessor) getRawTemplate(
 	ta config.TargetApi,
-	parentTarget config.Target,
-	path string,
-) (string, error) {
-	templateVersion := getTemplateVersion(tp.ParentTarget.DefaultVersion, ta.Version)
+) (string, string, error) {
+	templateVersionPath := getTemplateVersionPath(tp.ParentTarget.DefaultVersionPath, ta.VersionPath)
 	var tmplPath string
 	if tp.ParentTarget.TemplateDir == "" {
 		tmplPath = fs.GetLegacyTemplatePath(tp.TemplatesDir, tp.ParentTarget.TemplatePath)
-	} else if templateVersion != "" {
-		tmplPath = fs.GetTemplatePath(tp.TemplatesDir, tp.ParentTarget.TemplateDir, templateVersion)
+	} else if templateVersionPath != "" {
+		tmplPath = fs.GetTemplatePath(tp.TemplatesDir, tp.ParentTarget.TemplateDir, templateVersionPath)
 	} else {
 		desc := "You specified templateDir without specifing a template version!  You must specify either Target.DefaultVersion or a TargetApi.Version"
 		msg := fmt.Sprintf(
@@ -145,32 +148,24 @@ func (tp *TargetProcessor) getRawTemplate(
 			desc,
 		)
 		err := errors.New(msg)
-		panic(err)
-	}
-
-	isDir, err := fs.IsDir(path)
-	if err != nil {
-		panic(err)
-	}
-
-	if isDir {
-		panic(fmt.Sprintf("ERROR: %s is a directory, aborting", path))
+		return "", "", err
 	}
 
 	tmplRaw, err := os.ReadFile(tmplPath)
 	if err != nil {
-		panic(fmt.Sprintf("Error reading file: %+v", err))
+		return "", "", errors.New(fmt.Sprintf("Error reading file: %+v", err))
 	}
 
 	templateContent := string(tmplRaw)
 
-	return templateContent, nil
+	return templateContent, tmplPath, nil
 }
 
 func (ctrl *TargetProcessorController) renderEachFile(
 	path, templateRaw string,
 	api config.ApiDefinition,
 	ms config.MicroserviceDefinition,
+	renderer targetrenderer.TargetRenderer,
 ) error {
 	targetLabel := ctrl.ParentTarget.Label
 	templatesDir := ctrl.TemplatesDir
@@ -198,25 +193,18 @@ func (ctrl *TargetProcessorController) renderEachFile(
 
 	templateRaw = preprocessTemplate(templateRaw, ms, ctrl.TagRegistry)
 
-	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateRaw)
-	if err != nil {
-		slog.Info(templateRaw)
-		return errors.WithStack(err)
-	}
-
-	var sb strings.Builder
-	err = tmpl.Execute(&sb, struct {
+	data := struct {
 		Api          config.ApiDefinition
 		Microservice config.MicroserviceDefinition
 	}{
 		Api:          api,
 		Microservice: ms,
-	})
+	}
+
+	result, err := renderer.Render(templateRaw, data)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-
-	result := strings.TrimSpace(sb.String())
 
 	content := []byte(result)
 	for _, p := range pluginReg.GetPlugins(targetLabel) {
@@ -242,6 +230,18 @@ func (ctrl *TargetProcessorController) renderEachFile(
 	return nil
 }
 
+func replacePlaceholder(templateRaw, placeholderTag, content string, repeat bool) string {
+	// Define a regex pattern that makes {{ and }} optional around the placeholder
+	placeholderPattern := regexp.MustCompile(`{{\s*` + regexp.QuoteMeta(placeholderTag) + `\s*}}|` + regexp.QuoteMeta(placeholderTag))
+
+	return placeholderPattern.ReplaceAllStringFunc(templateRaw, func(match string) string {
+		if repeat {
+			return content + match
+		}
+		return content
+	})
+}
+
 func injectFunctionImplementationSnippets(
 	templateRaw string,
 	ms config.MicroserviceDefinition,
@@ -255,11 +255,11 @@ func injectFunctionImplementationSnippets(
 		}
 
 		// Handle hook property
-		re := regexp.MustCompile(`{{/\* FUNCTION_IMPLEMENTATIONS\s+hook="(\w+)"\s+\*/}}`)
+		re := regexp.MustCompile(`({{)?/\* FUNCTION_IMPLEMENTATIONS\s+hook="(\w+)"\s+\*/(}})?`)
 		templateRaw = re.ReplaceAllStringFunc(templateRaw, func(match string) string {
 			hookName := re.FindStringSubmatch(match)[1]
 			if snippetPaths.HooksDirectory != "" {
-				hookPath := templatesDir + snippetPaths.HooksDirectory + "/" + hookName + ".template"
+				hookPath := templatesDir + snippetPaths.HooksDirectory + "/" + hookName
 				hookContent, err := os.ReadFile(hookPath)
 				if err == nil {
 					return string(hookContent) + match
@@ -289,17 +289,22 @@ func injectFunctionImplementationSnippets(
 			}
 		}
 
-		placeholderTag := "{{/* FUNCTION_IMPLEMENTATIONS */}}"
-		templateRaw = strings.Replace(templateRaw, placeholderTag, string(snippetContent)+placeholderTag, 1)
-
-		importsPlaceholderTag := "{{/* FUNCTION_IMPORTS */}}"
-		templateRaw = strings.Replace(templateRaw, importsPlaceholderTag, string(importsContent)+importsPlaceholderTag, 1)
+		templateRaw = replacePlaceholder(templateRaw, "/* FUNCTION_IMPLEMENTATIONS */", string(snippetContent), true)
+		templateRaw = replacePlaceholder(templateRaw, "/* FUNCTION_IMPORTS */", string(importsContent), true)
 	}
+
+	templateRaw = replacePlaceholder(templateRaw, "/* FUNCTION_IMPLEMENTATIONS */", "", false)
+	templateRaw = replacePlaceholder(templateRaw, "/* FUNCTION_IMPORTS */", "", false)
 
 	return templateRaw, nil
 }
 
-func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string, api config.ApiDefinition) error {
+func (ctrl *TargetProcessorController) renderSingleFile(
+	path,
+	templateStr string,
+	api config.ApiDefinition,
+	renderer targetrenderer.TargetRenderer,
+) error {
 	targetLabel := ctrl.ParentTarget.Label
 	pluginReg := ctrl.PluginRegistry
 
@@ -319,18 +324,10 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 
 	templateStr = preprocessTemplate(templateStr, config.MicroserviceDefinition{}, ctrl.TagRegistry)
 
-	tmpl, err := goTmpl.New(path).Funcs(templateFuncs()).Parse(templateStr)
+	result, err := renderer.Render(templateStr, api)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-
-	var sb strings.Builder
-	err = tmpl.Execute(&sb, api)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	result := strings.TrimSpace(sb.String())
 
 	content := []byte(result)
 	for _, p := range pluginReg.GetPlugins(targetLabel) {
@@ -354,93 +351,6 @@ func (ctrl *TargetProcessorController) renderSingleFile(path, templateStr string
 	}
 
 	return nil
-}
-
-func templateFuncs() goTmpl.FuncMap {
-	return goTmpl.FuncMap{
-		"protoType":                     mapToProtoType,
-		"mapGoType":                     mapGoType,
-		"mapGoTypeWithCustomTypePrefix": mapGoTypeWithCustomTypePrefix,
-		"toGoModelFieldCase":            toGoModelFieldCase,
-		"add":                           func(a, b int) int { return a + b },
-		"camelCase":                     strcase.ToCamel,
-		"camelCaseCapitalizeID":         camelCaseCapitalizeID,
-		"lowerCamelCaseCapitalizeID":    lowerCamelCaseCapitalizeID,
-		"lowerCamelCaseNoExceptions":    lowerCamelCaseNoExceptions,
-		"camelCaseNoExceptions":         camelCaseNoExceptions,
-		"snakecase":                     strcase.ToSnake,
-		"lowerCamelCase":                strcase.ToLowerCamel,
-		"mapGraphQLType":                mapGraphQLType,
-		"mapGraphQLInputType":           mapGraphQLInputType,
-		"getGraphqlTypeForField":        getGraphqlTypeForField,
-		"getGraphqlNameForField":        getGraphqlNameForField,
-		"mapTypescriptType":             mapTypescriptType,
-		"fieldHasTag":                   fieldHasTag,
-		"isPrimitiveFieldType":          config.IsPrimitiveFieldType,
-		"getModelDirective":             getModelDirective,
-		"getModelDirectiveList":         getModelDirectiveList,
-		"getFieldDirective":             getFieldDirective,
-	}
-}
-
-func mapToProtoType(codemaType string) string {
-	switch codemaType {
-	case "ID", "String":
-		return "string"
-	case "Int":
-		return "int64"
-	case "Float":
-		return "double"
-	case "Boolean":
-		return "bool"
-	case "DateTime":
-		return "google.protobuf.Timestamp"
-	default:
-		if strings.HasPrefix(codemaType, "[") && strings.HasSuffix(codemaType, "]") {
-			return "repeated " + mapToProtoType(codemaType[1:len(codemaType)-1])
-		}
-		return codemaType // For custom types, use as-is
-	}
-}
-
-func mapGoType(codemaType string) string {
-	switch codemaType {
-	case "ID", "String":
-		return "string"
-	case "Int":
-		return "int64"
-	case "Float":
-		return "float64"
-	case "Boolean":
-		return "bool"
-	case "DateTime":
-		return "time.Time"
-	default:
-		if strings.HasPrefix(codemaType, "[") && strings.HasSuffix(codemaType, "]") {
-			return "[]" + mapGoType(codemaType[1:len(codemaType)-1])
-		}
-		return codemaType // For custom types, use as-is
-	}
-}
-
-func mapGoTypeWithCustomTypePrefix(codemaType string, customTypePrefix string) string {
-	switch codemaType {
-	case "ID", "String":
-		return "string"
-	case "Int":
-		return "int64"
-	case "Float":
-		return "float64"
-	case "Boolean":
-		return "bool"
-	case "DateTime":
-		return "time.Time"
-	default:
-		if strings.HasPrefix(codemaType, "[") && strings.HasSuffix(codemaType, "]") {
-			return "[]" + mapGoType(codemaType[1:len(codemaType)-1])
-		}
-		return customTypePrefix + codemaType
-	}
 }
 
 func preprocessTemplate(
@@ -499,168 +409,4 @@ func resolveTagReferences(template string, resolveTag func(string) config.TagDef
 	}
 
 	return template
-}
-
-func mapGraphQLType(t string) string {
-	switch t {
-	case "ID", "String":
-		return "String"
-	case "Int":
-		return "Int"
-	case "Float":
-		return "Float"
-	case "Boolean":
-		return "Boolean"
-	case "DateTime":
-		return "Int"
-	default:
-		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
-			return "[" + mapGraphQLType(t[1:len(t)-1]) + "]"
-		}
-		return t
-	}
-}
-
-func mapGraphQLInputType(t string) string {
-	switch t {
-	case "ID", "String":
-		return "String"
-	case "Int":
-		return "Int"
-	case "Float":
-		return "Float"
-	case "Boolean":
-		return "Boolean"
-	case "DateTime":
-		return "Int"
-	default:
-		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
-			return "[" + mapGraphQLInputType(t[1:len(t)-1]) + "]"
-		}
-		return t + "Input"
-	}
-}
-
-func getGraphqlTypeForField(f config.FieldDefinition) string {
-	mask := f.GetDirectiveStringValue(directive.WellKnownDirectiveGraphQLTypeNameMask)
-	if mask != "" {
-		return mask
-	}
-
-	return mapGraphQLType(f.Type)
-}
-
-func getGraphqlNameForField(f config.FieldDefinition) string {
-	mask := f.GetDirectiveStringValue(directive.WellKnownDirectiveGraphQLFieldNameMask)
-	if mask != "" {
-		return mask
-	}
-
-	return strcase.ToLowerCamel(f.Name)
-}
-
-func mapTypescriptType(codemaType string) string {
-	switch codemaType {
-	case "ID", "String":
-		return "string"
-	case "Int":
-		return "number"
-	case "Float":
-		return "number"
-	case "Boolean":
-		return "boolean"
-	case "DateTime":
-		return "number"
-	default:
-		return codemaType // For custom types and enums, use as-is
-	}
-}
-
-func toGoModelFieldCase(fieldName string) string {
-	// Convert field name to TitleCase
-	titleCaseField := strcase.ToCamel(fieldName)
-
-	// Check if the field name ends with "Id" and change it to "ID"
-	if strings.HasSuffix(titleCaseField, "Id") {
-		titleCaseField = strings.TrimSuffix(titleCaseField, "Id") + "ID"
-	}
-
-	return titleCaseField
-}
-
-func camelCaseCapitalizeID(fieldName string) string {
-	camelCaseField := strcase.ToSnake(fieldName)
-
-	if strings.HasSuffix(camelCaseField, "_id") {
-		// Replace the last occurrence of "id" or "Id" with "ID"
-		camelCaseField = strcase.ToCamel(strings.TrimSuffix(camelCaseField, "_id")) + "ID"
-	}
-	return camelCaseField
-}
-
-func lowerCamelCaseCapitalizeID(fieldName string) string {
-	camelCaseField := strcase.ToSnake(fieldName)
-
-	if strings.HasSuffix(camelCaseField, "_id") {
-		// Replace the last occurrence of "id" or "Id" with "ID"
-		camelCaseField = strcase.ToLowerCamel(strings.TrimSuffix(camelCaseField, "_id")) + "ID"
-	}
-	return camelCaseField
-}
-
-func lowerCamelCaseNoExceptions(fieldName string) string {
-	camelCaseField := strcase.ToSnake(fieldName)
-
-	if strings.HasSuffix(camelCaseField, "_id") {
-		camelCaseField = strcase.ToLowerCamel(strings.TrimSuffix(camelCaseField, "_id")) + "Id"
-	}
-	return camelCaseField
-}
-
-func camelCaseNoExceptions(fieldName string) string {
-	camelCaseField := strcase.ToSnake(fieldName)
-
-	if strings.HasSuffix(camelCaseField, "_id") {
-		camelCaseField = strcase.ToCamel(strings.TrimSuffix(camelCaseField, "_id")) + "Id"
-	}
-	return camelCaseField
-}
-
-func fieldHasTag(field config.FieldDefinition, tagName string) bool {
-	var hasTag bool
-	for _, t := range field.Tags {
-		if t.Name == tagName {
-			hasTag = true
-			break
-		}
-	}
-
-	return hasTag
-}
-
-func getModelDirective(f config.ModelDefinition, s string, defaultVal string) string {
-	val := f.GetDirectiveStringValue(s)
-	if val != "" {
-		return val
-	}
-
-	return defaultVal
-}
-
-func getModelDirectiveList(f config.ModelDefinition, s string) []interface{} {
-	arrVal := f.GetDirectiveListValue(s)
-	if arrVal != nil && len(arrVal) > 0 {
-		return arrVal
-	}
-
-	return make([]interface{}, 0)
-}
-
-func getFieldDirective(f config.FieldDefinition, s string, defaultVal string) string {
-	val := f.GetDirectiveStringValue(s)
-	if val != "" {
-		return val
-	}
-
-	return defaultVal
 }
