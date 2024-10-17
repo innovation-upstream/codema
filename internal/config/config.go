@@ -195,6 +195,18 @@ func (l *yamlConfigLoader) GetConfig() (*Config, error) {
 		}
 	}
 
+	for tx, t := range config.Targets {
+		if t.DefaultVersionPath == "" {
+			config.Targets[tx].DefaultVersionPath = t.DefaultVersion
+		}
+
+		for tax, ta := range t.Apis {
+			if ta.VersionPath == "" {
+				config.Targets[tx].Apis[tax].VersionPath = ta.Version
+			}
+		}
+	}
+
 	return &config, nil
 }
 
