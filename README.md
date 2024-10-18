@@ -1,5 +1,3 @@
-Here's a comprehensive README for Codema:
-
 # Codema: Streamlined API Development through Model-Driven Code Generation
 
 ## Introduction
